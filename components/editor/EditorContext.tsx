@@ -17,6 +17,7 @@ export interface EditorContextValue {
   selectElement: (elementId?: string) => void;
   undo: () => void;
   redo: () => void;
+  updateDocumentTitle: (title: string) => void;
   addSlide: () => void;
   duplicateCurrentSlide: () => void;
   deleteCurrentSlide: () => void;

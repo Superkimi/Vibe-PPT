@@ -60,5 +60,6 @@ describe("AI route", () => {
     const requestBody = JSON.parse(String(options.body));
     expect(requestBody.response_format.type).toBe("json_schema");
     expect(requestBody.messages[0].role).toBe("system");
+    expect(requestBody.messages.at(-1)).toMatchObject({ role: "user", content: "让标题更明确" });
   });
 });

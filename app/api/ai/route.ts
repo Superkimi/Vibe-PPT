@@ -81,8 +81,8 @@ export async function POST(request: NextRequest) {
 
     const messages = [
       { role: "system", content: VIBE_PPT_SYSTEM_PROMPT },
+      { role: "system", content: `以下是当前演示和选择上下文：\n${input.context}` },
       ...input.messages.slice(-12),
-      { role: "user", content: `以下是当前演示和选择上下文：\n${input.context}` },
     ];
 
     const baseBody = {

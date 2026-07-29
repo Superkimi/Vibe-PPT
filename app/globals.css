@@ -193,6 +193,31 @@ select:focus-visible {
   color: #fdfcff;
 }
 
+.toolbar-notice {
+  position: absolute;
+  top: 66px;
+  right: 14px;
+  z-index: 12;
+  display: inline-flex;
+  max-width: 360px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #dec4ca;
+  border-radius: 10px;
+  background: #fff8fa;
+  box-shadow: 0 12px 32px rgba(66, 38, 46, 0.12);
+  padding: 10px 12px;
+  color: #8a4050;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.toolbar-notice span {
+  color: #a57a83;
+  font-size: 16px;
+}
+
 .studio-body {
   display: grid;
   grid-template-columns: 230px minmax(500px, 1fr) 360px;

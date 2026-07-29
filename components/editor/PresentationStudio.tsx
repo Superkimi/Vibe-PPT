@@ -94,6 +94,14 @@ export function PresentationStudio() {
     });
   }, []);
 
+  const updateDocumentTitle = useCallback((title: string) => {
+    setDocument((current) => ({
+      ...current,
+      title,
+      updatedAt: new Date().toISOString(),
+    }));
+  }, []);
+
   const selectedSlide = document.slides.find((slide) => slide.id === selectedSlideId) || document.slides[0];
   const selectedElement = selectedSlide.elements.find((element) => element.id === selectedElementId);
 
@@ -256,7 +264,11 @@ export function PresentationStudio() {
       setDocumentFromAi: (next) => {
         const normalized = normalizeDocument(next);
         commit(() => normalized);
-        setSelectedSlideId(normalized.slides[0].id);
+        setSelectedSlideId(
+          normalized.slides.some((slide) => slide.id === selectedSlideId)
+            ? selectedSlideId
+            : normalized.slides[0].id,
+        );
         setSelectedElementId(undefined);
       },
       selectSlide: (slideId) => {
@@ -266,6 +278,7 @@ export function PresentationStudio() {
       selectElement: setSelectedElementId,
       undo,
       redo,
+      updateDocumentTitle,
       addSlide,
       duplicateCurrentSlide,
       deleteCurrentSlide,
@@ -291,6 +304,7 @@ export function PresentationStudio() {
       selectedSlide,
       selectedSlideId,
       undo,
+      updateDocumentTitle,
       updateElement,
       updateSlide,
     ],
@@ -321,15 +335,17 @@ export function PresentationStudio() {
         </div>
         <div className="autosave-state">{saveState}</div>
       </div>
-      <ModelSettings
-        open={settingsOpen}
-        config={modelConfig}
-        onClose={() => setSettingsOpen(false)}
-        onSave={(config) => {
-          setModelConfig(config);
-          localStorage.setItem(MODEL_STORAGE_KEY, JSON.stringify(config));
-        }}
-      />
+      {settingsOpen && (
+        <ModelSettings
+          open
+          config={modelConfig}
+          onClose={() => setSettingsOpen(false)}
+          onSave={(config) => {
+            setModelConfig(config);
+            localStorage.setItem(MODEL_STORAGE_KEY, JSON.stringify(config));
+          }}
+        />
+      )}
       {presenting && (
         <PresentOverlay
           document={document}

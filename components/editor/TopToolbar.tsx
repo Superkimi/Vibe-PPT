@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowCounterClockwise,
@@ -28,11 +28,12 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
     undo,
     redo,
     addElement,
-    commit,
+    updateDocumentTitle,
     setDocumentFromAi,
   } = useEditor();
   const documentFileRef = useRef<HTMLInputElement>(null);
   const imageFileRef = useRef<HTMLInputElement>(null);
+  const [notice, setNotice] = useState("");
 
   async function optimizeImage(file: File) {
     const bitmap = await createImageBitmap(file);
@@ -124,9 +125,12 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
         <input
           value={document.title}
           aria-label="演示标题"
-          onChange={(event) =>
-            commit((current) => ({ ...current, title: event.target.value }))
-          }
+          onChange={(event) => updateDocumentTitle(event.target.value)}
+          onBlur={(event) => {
+            if (!event.target.value.trim()) {
+              updateDocumentTitle("未命名演示");
+            }
+          }}
         />
       </div>
       <div className="toolbar-group">
@@ -166,6 +170,9 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
                 fit: "cover",
                 radius: 20,
               });
+              setNotice("");
+            } catch {
+              setNotice("图片读取失败，请换一张 PNG、JPG 或 WebP");
             } finally {
               event.target.value = "";
             }
@@ -183,8 +190,13 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
           onChange={async (event) => {
             const file = event.target.files?.[0];
             if (!file) return;
-            const next = normalizeDocument(JSON.parse(await file.text()));
-            setDocumentFromAi(next, "导入 JSON 文档");
+            try {
+              const next = normalizeDocument(JSON.parse(await file.text()));
+              setDocumentFromAi(next, "导入 JSON 文档");
+              setNotice("");
+            } catch {
+              setNotice("无法导入：文件不是有效的 Vibe PPT 文档");
+            }
             event.target.value = "";
           }}
         />
@@ -194,13 +206,24 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
         <button type="button" className="icon-text-button" onClick={() => downloadJson(`${document.title}.vibe.json`, document)}>
           <DownloadSimple size={17} /> JSON
         </button>
-        <button type="button" className="icon-text-button" onClick={() => void exportPresentationToPptx(document)}>
+        <button
+          type="button"
+          className="icon-text-button"
+          onClick={() => {
+            void exportPresentationToPptx(document).catch(() => setNotice("PPTX 导出失败，请稍后重试"));
+          }}
+        >
           <DownloadSimple size={17} /> PPTX
         </button>
         <button type="button" className="present-button" onClick={onPresent}>
           <Play size={16} weight="fill" /> 演示
         </button>
       </div>
+      {notice && (
+        <button type="button" className="toolbar-notice" onClick={() => setNotice("")}>
+          {notice}<span>×</span>
+        </button>
+      )}
     </header>
   );
 }
