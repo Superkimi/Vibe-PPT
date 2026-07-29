@@ -531,9 +531,20 @@ select:focus-visible {
 }
 
 .chart-bar {
+  position: relative;
   width: 32%;
   min-width: 5px;
   border-radius: 4px 4px 0 0;
+}
+
+.chart-bar b {
+  position: absolute;
+  right: 50%;
+  bottom: calc(100% + 5px);
+  color: #5c5466;
+  font-size: 11px;
+  font-weight: 650;
+  transform: translateX(50%);
 }
 
 .chart-line-wrap {
@@ -748,6 +759,27 @@ select:focus-visible {
   color: var(--muted);
   font-size: 10px;
   line-height: 1.55;
+}
+
+.inspector-section .check-row {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.inspector-section .check-row input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+}
+
+.inspector-section .check-row span {
+  color: inherit;
+  font-size: inherit;
 }
 
 .element-heading {

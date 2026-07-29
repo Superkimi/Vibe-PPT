@@ -5,6 +5,9 @@ import type { ChartElement } from "@/lib/presentation-schema";
 export function ChartVisual({ element }: { element: ChartElement }) {
   const values = element.series.flatMap((series) => series.values);
   const max = Math.max(...values.map((value) => Math.abs(value)), 1);
+  const lineMin = Math.min(...values);
+  const lineMax = Math.max(...values);
+  const lineRange = Math.max(lineMax - lineMin, 1);
 
   if (element.chart === "pie") {
     const series = element.series[0];
@@ -42,7 +45,7 @@ export function ChartVisual({ element }: { element: ChartElement }) {
     const points = series.values
       .map((value, index) => {
         const x = element.labels.length === 1 ? 50 : (index / (element.labels.length - 1)) * 100;
-        const y = 92 - (value / max) * 80;
+        const y = 92 - ((value - lineMin) / lineRange) * 80;
         return `${x},${y}`;
       })
       .join(" ");
@@ -72,7 +75,9 @@ export function ChartVisual({ element }: { element: ChartElement }) {
                   background: series.color,
                 }}
                 title={`${series.name}: ${series.values[labelIndex] || 0}`}
-              />
+              >
+                {element.showValues && <b>{series.values[labelIndex] || 0}</b>}
+              </div>
             ))}
           </div>
           <span>{label}</span>

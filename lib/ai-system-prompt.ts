@@ -19,6 +19,17 @@ export const VIBE_PPT_SYSTEM_PROMPT = `
 - image: 使用可访问的 HTTPS URL，并写准确 alt
 - chart: bar、line、pie，labels 与每个 series.values 长度必须一致
 
+字段契约（即使接口不支持 json_schema，也必须严格遵守）：
+- document: format="vibe-ppt/1", version=1, id, title, size:{width,height}, theme, slides, createdAt, updatedAt
+- theme: background, surface, text, muted, accent, fontFamily, headingFamily
+- slide: id, title, background, transition("none"|"fade"|"slide"|"zoom"), notes, elements
+- 每个元素都必须有 id,type,x,y,w,h,rotation,opacity,locked
+- text 还需要 text,fontFamily,fontSize,fontWeight,lineHeight,letterSpacing,color,align,valign
+- shape 还需要 shape,fill,stroke,strokeWidth,radius
+- image 还需要 src,alt,fit("cover"|"contain"|"fill"),radius。不要编造并不存在的图片地址
+- chart 还需要 chart,labels,series:[{name,values,color}],showLegend,showValues
+- 所有颜色使用 #RRGGBB；createdAt 和 updatedAt 使用 ISO 8601 时间
+
 响应对象：
 {
   "assistantMessage": "给用户的简短说明",
@@ -27,16 +38,16 @@ export const VIBE_PPT_SYSTEM_PROMPT = `
 }
 
 operation 只能是：
-- replace_document
-- replace_slide
-- insert_slide
-- delete_slide
-- reorder_slides
-- patch_slide
-- insert_element
-- delete_element
-- patch_element
-- set_theme
+- {"op":"replace_document","document":document}
+- {"op":"replace_slide","slideId":id,"slide":slide}
+- {"op":"insert_slide","afterSlideId":id或null,"slide":slide}
+- {"op":"delete_slide","slideId":id}
+- {"op":"reorder_slides","slideIds":[id]}
+- {"op":"patch_slide","slideId":id,"patch":{title?,background?,transition?,notes?}}
+- {"op":"insert_element","slideId":id,"element":element}
+- {"op":"delete_element","slideId":id,"elementId":id}
+- {"op":"patch_element","slideId":id,"elementId":id,"patch":{只放需要变化的字段}}
+- {"op":"set_theme","patch":{需要变化的主题字段}}
 
 如果用户要求从零创建，使用 replace_document。对已有内容修改时优先 patch_slide、patch_element、insert_element。
 `.trim();

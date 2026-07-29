@@ -135,6 +135,26 @@ export function InspectorPanel() {
           <Field label="替代文本" wide>
             <input value={selectedElement.alt} onChange={(event) => updateElement(selectedElement.id, { alt: event.target.value })} />
           </Field>
+          <div className="field-grid">
+            <Field label="填充方式">
+              <select
+                value={selectedElement.fit}
+                onChange={(event) => updateElement(selectedElement.id, { fit: event.target.value as typeof selectedElement.fit })}
+              >
+                <option value="cover">裁切填充</option>
+                <option value="contain">完整显示</option>
+                <option value="fill">拉伸填充</option>
+              </select>
+            </Field>
+            <Field label="圆角">
+              <input
+                type="number"
+                min="0"
+                value={selectedElement.radius}
+                onChange={(event) => updateElement(selectedElement.id, { radius: Number(event.target.value) })}
+              />
+            </Field>
+          </div>
         </section>
       )}
 
@@ -175,6 +195,19 @@ function TextInspector({ element, update }: { element: TextElement; update: (id:
             <option value="right">右对齐</option>
           </select>
         </Field>
+        <Field label="垂直">
+          <select value={element.valign} onChange={(event) => update(element.id, { valign: event.target.value as TextElement["valign"] })}>
+            <option value="top">顶部</option>
+            <option value="middle">居中</option>
+            <option value="bottom">底部</option>
+          </select>
+        </Field>
+        <Field label="行高">
+          <input type="number" min="0.7" max="3" step="0.05" value={element.lineHeight} onChange={(event) => update(element.id, { lineHeight: Number(event.target.value) })} />
+        </Field>
+        <Field label="字间距">
+          <input type="number" min="-10" max="40" step="0.1" value={element.letterSpacing} onChange={(event) => update(element.id, { letterSpacing: Number(event.target.value) })} />
+        </Field>
       </div>
     </section>
   );
@@ -201,6 +234,9 @@ function ShapeInspector({ element, update }: { element: ShapeElement; update: (i
         <Field label="描边">
           <input type="number" min="0" value={element.strokeWidth} onChange={(event) => update(element.id, { strokeWidth: Number(event.target.value) })} />
         </Field>
+        <Field label="描边色">
+          <input type="color" value={element.stroke.startsWith("#") ? element.stroke : "#000000"} onChange={(event) => update(element.id, { stroke: event.target.value })} />
+        </Field>
       </div>
     </section>
   );
@@ -217,6 +253,14 @@ function ChartInspector({ element, update }: { element: ChartElement; update: (i
           <option value="pie">饼图</option>
         </select>
       </Field>
+      <label className="check-row">
+        <input type="checkbox" checked={element.showLegend} onChange={(event) => update(element.id, { showLegend: event.target.checked })} />
+        <span>显示图例</span>
+      </label>
+      <label className="check-row">
+        <input type="checkbox" checked={element.showValues} onChange={(event) => update(element.id, { showValues: event.target.checked })} />
+        <span>显示数值</span>
+      </label>
       <p className="field-hint">可在 AI 对话中直接描述数据和希望强调的结论。</p>
     </section>
   );
