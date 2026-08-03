@@ -8,6 +8,7 @@ import {
   ChartBar,
   DownloadSimple,
   FileArrowUp,
+  Globe,
   ImageSquare,
   Play,
   Rectangle,
@@ -19,6 +20,7 @@ import { normalizeDocument } from "@/lib/document-operations";
 import { exportPresentationToPptx } from "@/lib/pptx-export";
 import type { SlideElement } from "@/lib/presentation-schema";
 import { useEditor } from "./EditorContext";
+import { useEditorI18n } from "./EditorI18n";
 
 export function TopToolbar({ onPresent }: { onPresent: () => void }) {
   const {
@@ -31,6 +33,7 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
     updateDocumentTitle,
     setDocumentFromAi,
   } = useEditor();
+  const { locale, setLocale, t } = useEditorI18n();
   const documentFileRef = useRef<HTMLInputElement>(null);
   const imageFileRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState("");
@@ -42,7 +45,7 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("无法读取这张图片");
+    if (!context) throw new Error(t("imageReadFailed"));
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close();
     return {
@@ -66,8 +69,8 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
       addElement({
         ...common,
         type,
-        name: "文本",
-        text: "双击编辑文字",
+        name: t("text"),
+        text: t("doubleClickEdit"),
         fontFamily: "var(--font-sans)",
         fontSize: 44,
         fontWeight: 650,
@@ -81,7 +84,7 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
       addElement({
         ...common,
         type,
-        name: "形状",
+        name: t("shape"),
         shape: "rectangle",
         fill: document.theme.accent,
         stroke: "transparent",
@@ -94,9 +97,9 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
       addElement({
         ...common,
         type,
-        name: "图片",
+        name: t("image"),
         src: "https://picsum.photos/seed/vibe-ppt/1000/700",
-        alt: "演示图片",
+        alt: t("sampleImage"),
         fit: "cover",
         radius: 20,
         w: 480,
@@ -106,10 +109,10 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
       addElement({
         ...common,
         type: "chart",
-        name: "图表",
+        name: t("chart"),
         chart: "bar",
-        labels: ["一月", "二月", "三月", "四月"],
-        series: [{ name: "示例数据", values: [28, 44, 39, 62], color: document.theme.accent }],
+        labels: [t("january"), t("february"), t("march"), t("april")],
+        series: [{ name: t("sampleData"), values: [28, 44, 39, 62], color: document.theme.accent }],
         showLegend: false,
         showValues: false,
         w: 640,
@@ -121,28 +124,28 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
   return (
     <header className="top-toolbar">
       <div className="brand-lockup">
-        <Link href="/" aria-label="返回 Vibe PPT 首页"><span>V</span></Link>
+        <Link href="/" aria-label={t("home")}><span>V</span></Link>
         <input
           value={document.title}
-          aria-label="演示标题"
+          aria-label={t("presentationTitle")}
           onChange={(event) => updateDocumentTitle(event.target.value)}
           onBlur={(event) => {
             if (!event.target.value.trim()) {
-              updateDocumentTitle("未命名演示");
+              updateDocumentTitle(t("untitledPresentation"));
             }
           }}
         />
       </div>
       <div className="toolbar-group">
-        <button type="button" onClick={undo} disabled={!canUndo} title="撤销">
+        <button type="button" onClick={undo} disabled={!canUndo} title={t("undo")} aria-label={t("undo")}>
           <ArrowCounterClockwise size={18} />
         </button>
-        <button type="button" onClick={redo} disabled={!canRedo} title="重做">
+        <button type="button" onClick={redo} disabled={!canRedo} title={t("redo")} aria-label={t("redo")}>
           <ArrowClockwise size={18} />
         </button>
         <span className="toolbar-divider" />
-        <button type="button" onClick={() => insert("text")}><TextT size={18} />文字</button>
-        <button type="button" onClick={() => insert("shape")}><Rectangle size={18} />形状</button>
+        <button type="button" onClick={() => insert("text")}><TextT size={18} />{t("text")}</button>
+        <button type="button" onClick={() => insert("shape")}><Rectangle size={18} />{t("shape")}</button>
         <input
           ref={imageFileRef}
           type="file"
@@ -172,14 +175,14 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
               });
               setNotice("");
             } catch {
-              setNotice("图片读取失败，请换一张 PNG、JPG 或 WebP");
+              setNotice(t("imageReadFailed"));
             } finally {
               event.target.value = "";
             }
           }}
         />
-        <button type="button" onClick={() => imageFileRef.current?.click()}><ImageSquare size={18} />图片</button>
-        <button type="button" onClick={() => insert("chart")}><ChartBar size={18} />图表</button>
+        <button type="button" onClick={() => imageFileRef.current?.click()}><ImageSquare size={18} />{t("image")}</button>
+        <button type="button" onClick={() => insert("chart")}><ChartBar size={18} />{t("chart")}</button>
       </div>
       <div className="toolbar-actions">
         <input
@@ -192,31 +195,40 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
             if (!file) return;
             try {
               const next = normalizeDocument(JSON.parse(await file.text()));
-              setDocumentFromAi(next, "导入 JSON 文档");
+              setDocumentFromAi(next, t("importedJson"));
               setNotice("");
             } catch {
-              setNotice("无法导入：文件不是有效的 Vibe PPT 文档");
+              setNotice(t("invalidDocument"));
             }
             event.target.value = "";
           }}
         />
         <button type="button" className="icon-text-button" onClick={() => documentFileRef.current?.click()}>
-          <FileArrowUp size={17} /> 导入
+          <FileArrowUp size={17} /> {t("import")}
         </button>
         <button type="button" className="icon-text-button" onClick={() => downloadJson(`${document.title}.vibe.json`, document)}>
-          <DownloadSimple size={17} /> JSON
+          <DownloadSimple size={17} /> {t("json")}
         </button>
         <button
           type="button"
           className="icon-text-button"
           onClick={() => {
-            void exportPresentationToPptx(document).catch(() => setNotice("PPTX 导出失败，请稍后重试"));
+            void exportPresentationToPptx(document).catch(() => setNotice(t("pptxExportFailed")));
           }}
         >
-          <DownloadSimple size={17} /> PPTX
+          <DownloadSimple size={17} /> {t("pptx")}
         </button>
         <button type="button" className="present-button" onClick={onPresent}>
-          <Play size={16} weight="fill" /> 演示
+          <Play size={16} weight="fill" /> {t("present")}
+        </button>
+        <button
+          type="button"
+          className="language-toggle"
+          onClick={() => setLocale(locale === "zh" ? "en" : "zh")}
+          title={t("switchLanguage")}
+          aria-label={t("switchLanguage")}
+        >
+          <Globe size={17} /> {locale === "zh" ? t("switchLanguageShort") : t("switchLanguageShort")}
         </button>
       </div>
       {notice && (

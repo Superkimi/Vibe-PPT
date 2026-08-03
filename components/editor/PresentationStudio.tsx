@@ -14,12 +14,38 @@ import { DEFAULT_MODEL_CONFIG, ModelSettings } from "./ModelSettings";
 import { PresentOverlay } from "./PresentOverlay";
 import { SlideRail } from "./SlideRail";
 import { TopToolbar } from "./TopToolbar";
+import { EditorI18nProvider, useEditorI18n } from "./EditorI18n";
+import type { EditorLocale } from "@/lib/editor-i18n";
 
 const STORAGE_KEY = "vibe-ppt-document";
 const MODEL_STORAGE_KEY = "vibe-ppt-model-config";
+const LOCALE_STORAGE_KEY = "vibe-ppt-locale";
 const INITIAL_DOCUMENT = createStarterDocument();
 
 export function PresentationStudio() {
+  const [locale, setLocale] = useState<EditorLocale>("zh");
+
+  useEffect(() => {
+    const savedLocale = localStorage.getItem(LOCALE_STORAGE_KEY);
+    // Loading the persisted language is the external-system synchronization this effect owns.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (savedLocale === "en" || savedLocale === "zh") setLocale(savedLocale);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    document.documentElement.lang = locale === "en" ? "en" : "zh-CN";
+  }, [locale]);
+
+  return (
+    <EditorI18nProvider locale={locale} setLocale={setLocale}>
+      <StudioWorkspace />
+    </EditorI18nProvider>
+  );
+}
+
+function StudioWorkspace() {
+  const { locale, t } = useEditorI18n();
   const [document, setDocument] = useState<PresentationDocument>(INITIAL_DOCUMENT);
   const [selectedSlideId, setSelectedSlideId] = useState(INITIAL_DOCUMENT.slides[0].id);
   const [selectedElementId, setSelectedElementId] = useState<string>();
@@ -28,15 +54,18 @@ export function PresentationStudio() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL_CONFIG);
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
-  const [saveState, setSaveState] = useState("已保存");
+  const [saveState, setSaveState] = useState(t("saved"));
   const pastRef = useRef<PresentationDocument[]>([]);
   const futureRef = useRef<PresentationDocument[]>([]);
   const hydratedRef = useRef(false);
+  const hasSavedDocumentRef = useRef(false);
+  const starterLocaleRef = useRef<EditorLocale>("zh");
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
+        hasSavedDocumentRef.current = true;
         const next = normalizeDocument(JSON.parse(saved));
         // Loading persisted state is the external-system synchronization this effect owns.
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -53,14 +82,23 @@ export function PresentationStudio() {
   }, []);
 
   useEffect(() => {
+    if (!hydratedRef.current || hasSavedDocumentRef.current) return;
+    if (document.id !== INITIAL_DOCUMENT.id || document.updatedAt !== INITIAL_DOCUMENT.updatedAt || starterLocaleRef.current === locale) return;
+    starterLocaleRef.current = locale;
+    const localizedStarter = createStarterDocument(locale);
+    setDocument(localizedStarter);
+    setSelectedSlideId(localizedStarter.slides[0].id);
+  }, [document, locale]);
+
+  useEffect(() => {
     if (!hydratedRef.current) return;
-    setSaveState("保存中");
+    setSaveState(t("saving"));
     const timer = window.setTimeout(() => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
-      setSaveState("已保存");
+      setSaveState(t("saved"));
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [document]);
+  }, [document, t]);
 
   const commit = useCallback((updater: (current: PresentationDocument) => PresentationDocument) => {
     setDocument((current) => {
@@ -148,7 +186,7 @@ export function PresentationStudio() {
   const addSlide = useCallback(() => {
     const slide: Slide = {
       id: nanoid(),
-      title: `第 ${document.slides.length + 1} 页`,
+      title: t("pageTitle", { count: document.slides.length + 1 }),
       background: document.theme.background,
       transition: "fade",
       notes: "",
@@ -156,7 +194,7 @@ export function PresentationStudio() {
         {
           id: nanoid(),
           type: "text",
-          name: "标题",
+          name: t("text"),
           x: 92,
           y: 86,
           w: 900,
@@ -164,7 +202,7 @@ export function PresentationStudio() {
           rotation: 0,
           opacity: 1,
           locked: false,
-          text: "这一页的核心观点",
+          text: t("slideHeadline"),
           fontFamily: document.theme.headingFamily,
           fontSize: 52,
           fontWeight: 700,
@@ -184,7 +222,7 @@ export function PresentationStudio() {
     });
     setSelectedSlideId(slide.id);
     setSelectedElementId(undefined);
-  }, [commit, document.slides.length, document.theme, selectedSlideId]);
+  }, [commit, document.slides.length, document.theme, selectedSlideId, t]);
 
   const duplicateCurrentSlide = useCallback(() => {
     const duplicate = duplicateSlide(selectedSlide);
@@ -320,10 +358,10 @@ export function PresentationStudio() {
           <aside className="right-panel">
             <div className="panel-tabs">
               <button type="button" className={activePanel === "design" ? "is-active" : ""} onClick={() => setActivePanel("design")}>
-                <SlidersHorizontal size={16} /> 设计
+                <SlidersHorizontal size={16} /> {t("design")}
               </button>
               <button type="button" className={activePanel === "ai" ? "is-active" : ""} onClick={() => setActivePanel("ai")}>
-                <MagicWand size={16} /> AI
+                <MagicWand size={16} /> {t("ai")}
               </button>
             </div>
             {activePanel === "design" ? (

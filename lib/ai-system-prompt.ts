@@ -1,4 +1,5 @@
 import type { PresentationDocument } from "./presentation-schema";
+import type { EditorLocale } from "./editor-i18n";
 
 export const VIBE_PPT_SYSTEM_PROMPT = `
 你是 Vibe PPT 的演示设计总监和结构化编辑代理。你的唯一输出必须是一个 JSON 对象，不要输出 Markdown 代码块。
@@ -52,12 +53,18 @@ operation 只能是：
 如果用户要求从零创建，使用 replace_document。对已有内容修改时优先 patch_slide、patch_element、insert_element。
 `.trim();
 
-export function buildAiContext(document: PresentationDocument, selectedSlideId: string, selectedElementId?: string) {
+export function buildAiContext(
+  document: PresentationDocument,
+  selectedSlideId: string,
+  selectedElementId?: string,
+  locale: EditorLocale = "zh",
+) {
   const selectedSlide = document.slides.find((slide) => slide.id === selectedSlideId);
   const selectedElement = selectedSlide?.elements.find((element) => element.id === selectedElementId);
   return JSON.stringify(
     {
       schema: "vibe-ppt/1",
+      interfaceLocale: locale,
       currentDocument: document,
       selection: {
         slideId: selectedSlideId,

@@ -1,16 +1,36 @@
 import type { PresentationDocument, Slide } from "./presentation-schema";
+import type { EditorLocale } from "./editor-i18n";
 
 const starterTimestamp = "2026-01-01T00:00:00.000Z";
 
-export function createStarterDocument(): PresentationDocument {
+export function createStarterDocument(locale: EditorLocale = "zh"): PresentationDocument {
   const accent = "#6650a4";
+  const copy = locale === "en"
+    ? {
+        coverNote: "Introduce the topic in one sentence, then show where this presentation will take the audience.",
+        title: "Make the idea clearer.",
+        subtitle: "Tell Vibe AI what you want on the right. It will create, rewrite, and organize the deck.",
+        titleElement: "Title",
+        subtitleElement: "Subtitle",
+        pageNumberElement: "Page number",
+        documentTitle: "Untitled presentation",
+      }
+    : {
+        coverNote: "用一句话介绍主题，再说明这份演示将带听众走向哪里。",
+        title: "把想法，讲得更好。",
+        subtitle: "在右侧告诉 AI 你的目标，它会创建、改写并整理整份演示。",
+        titleElement: "标题",
+        subtitleElement: "副标题",
+        pageNumberElement: "页码",
+        documentTitle: "未命名演示",
+      };
   const slides: Slide[] = [
     {
       id: "starter-cover",
       title: "Vibe PPT",
       background: "#f7f5fb",
       transition: "fade",
-      notes: "用一句话介绍主题，再说明这份演示将带听众走向哪里。",
+      notes: copy.coverNote,
       elements: [
         {
           id: "starter-accent",
@@ -32,7 +52,7 @@ export function createStarterDocument(): PresentationDocument {
         {
           id: "starter-title",
           type: "text",
-          name: "Title",
+          name: copy.titleElement,
           x: 132,
           y: 190,
           w: 920,
@@ -40,7 +60,7 @@ export function createStarterDocument(): PresentationDocument {
           rotation: 0,
           opacity: 1,
           locked: false,
-          text: "把想法，讲得更好。",
+          text: copy.title,
           fontFamily: "var(--font-sans)",
           fontSize: 78,
           fontWeight: 700,
@@ -54,7 +74,7 @@ export function createStarterDocument(): PresentationDocument {
         {
           id: "starter-subtitle",
           type: "text",
-          name: "Subtitle",
+          name: copy.subtitleElement,
           x: 136,
           y: 362,
           w: 760,
@@ -62,7 +82,7 @@ export function createStarterDocument(): PresentationDocument {
           rotation: 0,
           opacity: 1,
           locked: false,
-          text: "在右侧告诉 AI 你的目标，它会创建、改写并整理整份演示。",
+          text: copy.subtitle,
           fontFamily: "var(--font-sans)",
           fontSize: 26,
           fontWeight: 430,
@@ -75,7 +95,7 @@ export function createStarterDocument(): PresentationDocument {
         {
           id: "starter-page-number",
           type: "text",
-          name: "Page number",
+          name: copy.pageNumberElement,
           x: 1095,
           y: 620,
           w: 110,
@@ -101,7 +121,7 @@ export function createStarterDocument(): PresentationDocument {
     format: "vibe-ppt/1",
     version: 1,
     id: "starter-document",
-    title: "未命名演示",
+    title: copy.documentTitle,
     size: { width: 1280, height: 720 },
     theme: {
       background: "#f7f5fb",

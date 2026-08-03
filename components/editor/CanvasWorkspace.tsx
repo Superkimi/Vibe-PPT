@@ -5,9 +5,11 @@ import { Rnd } from "react-rnd";
 import { Minus, Plus } from "@phosphor-icons/react";
 import { useEditor } from "./EditorContext";
 import { ElementContent } from "./SlideRenderer";
+import { useEditorI18n } from "./EditorI18n";
 
 export function CanvasWorkspace() {
   const { document, selectedSlide, selectedElementId, selectElement, updateElement } = useEditor();
+  const { t } = useEditorI18n();
   const viewportRef = useRef<HTMLDivElement>(null);
   const [fitScale, setFitScale] = useState(0.68);
   const [zoom, setZoom] = useState(1);
@@ -111,14 +113,14 @@ export function CanvasWorkspace() {
           })}
         </div>
       </div>
-      <div className="zoom-control" aria-label="画布缩放">
-        <button type="button" onClick={() => setZoom((value) => Math.max(0.5, value / 1.15))} aria-label="缩小">
+      <div className="zoom-control" aria-label={t("canvasZoom")}>
+        <button type="button" onClick={() => setZoom((value) => Math.max(0.5, value / 1.15))} aria-label={t("zoomOut")}>
           <Minus size={14} />
         </button>
         <button type="button" className="zoom-value" onClick={() => setZoom(1)}>
           {Math.round(scale * 100)}%
         </button>
-        <button type="button" onClick={() => setZoom((value) => Math.min(3, value * 1.15))} aria-label="放大">
+        <button type="button" onClick={() => setZoom((value) => Math.min(3, value * 1.15))} aria-label={t("zoomIn")}>
           <Plus size={14} />
         </button>
       </div>

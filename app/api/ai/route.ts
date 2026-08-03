@@ -17,6 +17,7 @@ const requestSchema = z.object({
     .min(1)
     .max(40),
   context: z.string().min(1).max(1_500_000),
+  locale: z.enum(["zh", "en"]).default("zh"),
   config: z.object({
     baseUrl: z.string().url(),
     model: z.string().min(1).max(200),
@@ -79,8 +80,11 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "请先配置模型 API Key" }, { status: 400 });
     }
 
+    const localeInstruction = input.locale === "en"
+      ? "The editor interface is in English. Unless the user asks for another language, write slide copy, speaker notes, assistantMessage, and summary in English."
+      : "当前编辑器界面使用中文。除非用户明确要求其他语言，请使用中文生成页面文案、演讲者备注、assistantMessage 和 summary。";
     const messages = [
-      { role: "system", content: VIBE_PPT_SYSTEM_PROMPT },
+      { role: "system", content: `${VIBE_PPT_SYSTEM_PROMPT}\n\n${localeInstruction}` },
       { role: "system", content: `以下是当前演示和选择上下文：\n${input.context}` },
       ...input.messages.slice(-12),
     ];

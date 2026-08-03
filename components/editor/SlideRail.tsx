@@ -2,6 +2,7 @@
 
 import { Copy, DotsSixVertical, Plus, Trash } from "@phosphor-icons/react";
 import { useEditor } from "./EditorContext";
+import { useEditorI18n } from "./EditorI18n";
 import { SlideRenderer } from "./SlideRenderer";
 
 export function SlideRail() {
@@ -14,15 +15,16 @@ export function SlideRail() {
     deleteCurrentSlide,
     reorderSlides,
   } = useEditor();
+  const { t } = useEditorI18n();
 
   return (
-    <aside className="slide-rail" aria-label="页面目录">
+    <aside className="slide-rail" aria-label={t("slideDirectory")}>
       <div className="rail-heading">
         <div>
-          <span>页面</span>
+          <span>{t("slides")}</span>
           <strong>{document.slides.length}</strong>
         </div>
-        <button type="button" onClick={addSlide} title="新建页面" aria-label="新建页面">
+        <button type="button" onClick={addSlide} title={t("newSlide")} aria-label={t("newSlide")}>
           <Plus size={17} weight="bold" />
         </button>
       </div>
@@ -57,10 +59,10 @@ export function SlideRail() {
       </div>
       <div className="rail-actions">
         <button type="button" onClick={duplicateCurrentSlide}>
-          <Copy size={16} /> 复制
+          <Copy size={16} /> {t("duplicate")}
         </button>
         <button type="button" onClick={deleteCurrentSlide} disabled={document.slides.length === 1}>
-          <Trash size={16} /> 删除
+          <Trash size={16} /> {t("delete")}
         </button>
       </div>
     </aside>

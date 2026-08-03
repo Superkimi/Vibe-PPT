@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, ArrowRight, X } from "@phosphor-icons/react";
 import type { PresentationDocument } from "@/lib/presentation-schema";
 import { SlideRenderer } from "./SlideRenderer";
+import { useEditorI18n } from "./EditorI18n";
 
 export function PresentOverlay({
   document,
@@ -15,6 +16,7 @@ export function PresentOverlay({
   onClose: () => void;
 }) {
   const [index, setIndex] = useState(initialIndex);
+  const { t } = useEditorI18n();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -32,15 +34,15 @@ export function PresentOverlay({
         <SlideRenderer document={document} slide={slide} className={`transition-${slide.transition}`} />
       </div>
       <div className="present-controls">
-        <button type="button" onClick={() => setIndex((value) => Math.max(0, value - 1))} disabled={index === 0} aria-label="上一页">
+        <button type="button" onClick={() => setIndex((value) => Math.max(0, value - 1))} disabled={index === 0} aria-label={t("previousSlide")}>
           <ArrowLeft size={18} />
         </button>
         <span>{index + 1} / {document.slides.length}</span>
-        <button type="button" onClick={() => setIndex((value) => Math.min(document.slides.length - 1, value + 1))} disabled={index === document.slides.length - 1} aria-label="下一页">
+        <button type="button" onClick={() => setIndex((value) => Math.min(document.slides.length - 1, value + 1))} disabled={index === document.slides.length - 1} aria-label={t("nextSlide")}>
           <ArrowRight size={18} />
         </button>
       </div>
-      <button type="button" className="present-close" onClick={onClose} aria-label="退出演示">
+      <button type="button" className="present-close" onClick={onClose} aria-label={t("exitPresentation")}>
         <X size={20} />
       </button>
     </div>
