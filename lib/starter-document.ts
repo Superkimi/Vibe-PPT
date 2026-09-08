@@ -28,6 +28,7 @@ export function createStarterDocument(locale: EditorLocale = "zh"): Presentation
     {
       id: "starter-cover",
       title: "Vibe PPT",
+      layout: "cover",
       background: "#f7f5fb",
       transition: "fade",
       notes: copy.coverNote,

@@ -71,6 +71,8 @@ export function SlideRenderer({
   return (
     <div
       className={`slide-renderer ${className}`}
+      data-slide-id={slide.id}
+      data-slide-title={slide.title}
       style={{ width: document.size.width, height: document.size.height, background: slide.background }}
     >
       {slide.elements.map((element) => (

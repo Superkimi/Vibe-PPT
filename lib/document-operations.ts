@@ -8,6 +8,7 @@ import {
   type Slide,
   type SlideElement,
 } from "./presentation-schema";
+import { applyLayoutToSlide, inferLayout } from "./layout-templates";
 
 function clone<T>(value: T): T {
   return structuredClone(value);
@@ -39,6 +40,7 @@ function normalizeSlide(slide: Slide, document: PresentationDocument): Slide {
   return {
     ...slide,
     id: slide.id || nanoid(),
+    layout: inferLayout(slide),
     elements: slide.elements.map((element) =>
       clampElement({ ...element, id: element.id || nanoid() } as SlideElement, document.size.width, document.size.height),
     ),
@@ -108,6 +110,9 @@ export function applyOperations(document: PresentationDocument, input: AiOperati
         break;
       case "patch_slide":
         next.slides[slideIndex] = { ...next.slides[slideIndex], ...operation.patch };
+        break;
+      case "apply_layout":
+        next.slides[slideIndex] = applyLayoutToSlide(next.slides[slideIndex], operation.layout);
         break;
       case "insert_element":
         next.slides[slideIndex].elements.push(

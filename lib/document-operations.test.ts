@@ -4,8 +4,9 @@ import { createStarterDocument } from "./starter-document";
 
 describe("presentation schema operations", () => {
   it("normalizes a valid starter document", () => {
-    const document = createStarterDocument();
-    expect(normalizeDocument(document).format).toBe("vibe-ppt/1");
+    const document = normalizeDocument(createStarterDocument());
+    expect(document.format).toBe("vibe-ppt/1");
+    expect(document.slides[0].layout).toBe("cover");
   });
 
   it("applies a schema-checked element patch without allowing identity changes", () => {
@@ -48,5 +49,24 @@ describe("presentation schema operations", () => {
     expect(() =>
       applyOperations(withTwo, [{ op: "reorder_slides", slideIds: [document.slides[0].id] }]),
     ).toThrow("页面顺序不完整");
+  });
+
+  it("changes layout without changing slide content", () => {
+    const document = createStarterDocument();
+    const slide = document.slides[0];
+    const textBefore = slide.elements
+      .filter((element) => element.type === "text")
+      .map((element) => ({ id: element.id, text: element.text }));
+
+    const next = applyOperations(document, [
+      { op: "apply_layout", slideId: slide.id, layout: "closing" },
+    ]);
+
+    expect(next.slides[0].layout).toBe("closing");
+    expect(
+      next.slides[0].elements
+        .filter((element) => element.type === "text")
+        .map((element) => ({ id: element.id, text: element.text })),
+    ).toEqual(textBefore);
   });
 });

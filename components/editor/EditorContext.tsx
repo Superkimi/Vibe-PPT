@@ -2,6 +2,8 @@
 
 import { createContext, useContext } from "react";
 import type { PresentationDocument, Slide, SlideElement } from "@/lib/presentation-schema";
+import type { LayoutId } from "@/lib/layout-types";
+import type { PresentationQualityReport } from "@/lib/presentation-quality";
 
 export interface EditorContextValue {
   document: PresentationDocument;
@@ -11,6 +13,7 @@ export interface EditorContextValue {
   selectedElement?: SlideElement;
   canUndo: boolean;
   canRedo: boolean;
+  qualityReport: PresentationQualityReport;
   commit: (updater: (current: PresentationDocument) => PresentationDocument) => void;
   setDocumentFromAi: (document: PresentationDocument, summary: string) => void;
   selectSlide: (slideId: string) => void;
@@ -26,6 +29,7 @@ export interface EditorContextValue {
   addElement: (element: SlideElement) => void;
   deleteSelectedElement: () => void;
   reorderSlides: (from: number, to: number) => void;
+  applyLayout: (layout: LayoutId) => void;
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null);

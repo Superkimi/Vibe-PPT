@@ -2,6 +2,7 @@
 
 import { Lock, LockOpen, Trash } from "@phosphor-icons/react";
 import type { ChartElement, ShapeElement, TextElement } from "@/lib/presentation-schema";
+import { getLayoutCandidates } from "@/lib/layout-templates";
 import { useEditor } from "./EditorContext";
 import { useEditorI18n } from "./EditorI18n";
 
@@ -38,8 +39,9 @@ export function InspectorPanel() {
     updateElement,
     deleteSelectedElement,
     commit,
+    applyLayout,
   } = useEditor();
-  const { t } = useEditorI18n();
+  const { locale, t } = useEditorI18n();
 
   if (!selectedElement) {
     return (
@@ -60,6 +62,23 @@ export function InspectorPanel() {
               <option value="zoom">{t("transitionZoom")}</option>
             </select>
           </Field>
+        </section>
+        <section className="inspector-section layout-section">
+          <h3>{t("layoutSection")}</h3>
+          <p className="field-hint">{t("layoutHint")}</p>
+          <div className="layout-options">
+            {getLayoutCandidates(selectedSlide).map((layout) => (
+              <button
+                type="button"
+                key={layout.id}
+                className={selectedSlide.layout === layout.id ? "is-active" : ""}
+                title={locale === "en" ? layout.descriptionEn : layout.description}
+                onClick={() => applyLayout(layout.id)}
+              >
+                {locale === "en" ? layout.labelEn : layout.label}
+              </button>
+            ))}
+          </div>
         </section>
         <section className="inspector-section">
           <h3>{t("speakerNotes")}</h3>
