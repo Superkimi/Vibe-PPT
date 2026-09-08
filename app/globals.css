@@ -761,6 +761,30 @@ select:focus-visible {
   line-height: 1.55;
 }
 
+.layout-options {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.layout-options button {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fefcff;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.layout-options button:hover,
+.layout-options button.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
 .inspector-section .check-row {
   display: flex;
   grid-column: 1 / -1;
@@ -1339,10 +1363,93 @@ select:focus-visible {
 
 .autosave-state {
   position: fixed;
-  right: 371px;
+  right: 515px;
   bottom: 12px;
   z-index: 4;
   color: rgba(72, 65, 80, 0.62);
+  font-size: 9px;
+}
+
+.quality-status {
+  position: fixed;
+  right: 377px;
+  bottom: 10px;
+  z-index: 4;
+}
+
+.quality-status > button {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(251, 250, 252, 0.96);
+  padding: 0 8px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 9px;
+  box-shadow: 0 5px 18px rgba(54, 44, 68, 0.08);
+}
+
+.quality-status > button small {
+  color: var(--dim);
+  font-size: 8px;
+}
+
+.quality-status.is-clean > button svg {
+  color: #38856e;
+}
+
+.quality-status.has-issues > button svg {
+  color: var(--danger);
+}
+
+.quality-popover {
+  position: absolute;
+  right: 0;
+  bottom: 34px;
+  width: 300px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 11px 12px;
+  box-shadow: var(--shadow);
+}
+
+.quality-counts {
+  display: flex;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.quality-counts span:first-child {
+  color: var(--danger);
+}
+
+.quality-popover ul {
+  display: grid;
+  gap: 8px;
+  max-height: 230px;
+  overflow: auto;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quality-popover li {
+  display: grid;
+  gap: 2px;
+  border-top: 1px solid var(--line);
+  padding-top: 7px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.quality-popover li b {
+  color: var(--ink);
   font-size: 9px;
 }
 

@@ -1,5 +1,7 @@
 import type { PresentationDocument } from "./presentation-schema";
 import type { EditorLocale } from "./editor-i18n";
+import { LAYOUT_TEMPLATES, getLayoutCandidates } from "./layout-templates";
+import { inspectDocument } from "./presentation-quality";
 
 export const VIBE_PPT_SYSTEM_PROMPT = `
 你是 Vibe PPT 的演示设计总监和结构化编辑代理。你的唯一输出必须是一个 JSON 对象，不要输出 Markdown 代码块。
@@ -13,6 +15,8 @@ export const VIBE_PPT_SYSTEM_PROMPT = `
 6. 为每页补充 notes，说明演讲者该讲什么。
 7. 修改已有演示时，尽量使用小范围 operation，保留用户没有要求改变的内容。
 8. 所有 slideId 和 elementId 必须引用上下文中的真实 ID。新增 ID 使用短的、唯一的 ASCII 字符串。
+9. 每页选择一个 layout。优先根据内容数量和类型选择容量匹配的版式，不要把过多文字塞进少量槽位。
+10. 用户只要求换版式时，使用 apply_layout；保留原有文字、数字、单位、图表数据和图片，不要顺便改写事实。
 
 允许的元素类型：
 - text: 纯文本，不使用 HTML
@@ -20,10 +24,12 @@ export const VIBE_PPT_SYSTEM_PROMPT = `
 - image: 使用可访问的 HTTPS URL，并写准确 alt
 - chart: bar、line、pie，labels 与每个 series.values 长度必须一致
 
+可选 layout：cover（封面）、bullets（要点）、metrics（指标）、comparison（对比）、process（流程）、chart（图表）、image-text（图文）、closing（结尾）。layout 只描述结构，不替代页面内容。
+
 字段契约（即使接口不支持 json_schema，也必须严格遵守）：
 - document: format="vibe-ppt/1", version=1, id, title, size:{width,height}, theme, slides, createdAt, updatedAt
 - theme: background, surface, text, muted, accent, fontFamily, headingFamily
-- slide: id, title, background, transition("none"|"fade"|"slide"|"zoom"), notes, elements
+- slide: id, title, layout?, background, transition("none"|"fade"|"slide"|"zoom"), notes, elements
 - 每个元素都必须有 id,type,x,y,w,h,rotation,opacity,locked
 - text 还需要 text,fontFamily,fontSize,fontWeight,lineHeight,letterSpacing,color,align,valign
 - shape 还需要 shape,fill,stroke,strokeWidth,radius
@@ -44,7 +50,8 @@ operation 只能是：
 - {"op":"insert_slide","afterSlideId":id或null,"slide":slide}
 - {"op":"delete_slide","slideId":id}
 - {"op":"reorder_slides","slideIds":[id]}
-- {"op":"patch_slide","slideId":id,"patch":{title?,background?,transition?,notes?}}
+- {"op":"patch_slide","slideId":id,"patch":{title?,layout?,background?,transition?,notes?}}
+- {"op":"apply_layout","slideId":id,"layout":"cover|bullets|metrics|comparison|process|chart|image-text|closing"}
 - {"op":"insert_element","slideId":id,"element":element}
 - {"op":"delete_element","slideId":id,"elementId":id}
 - {"op":"patch_element","slideId":id,"elementId":id,"patch":{只放需要变化的字段}}
@@ -61,16 +68,32 @@ export function buildAiContext(
 ) {
   const selectedSlide = document.slides.find((slide) => slide.id === selectedSlideId);
   const selectedElement = selectedSlide?.elements.find((element) => element.id === selectedElementId);
+  const selectedLayoutCandidates = selectedSlide
+    ? getLayoutCandidates(selectedSlide).map((layout) => ({
+        id: layout.id,
+        label: locale === "en" ? layout.labelEn : layout.label,
+        description: locale === "en" ? layout.descriptionEn : layout.description,
+        capacity: layout.capacity,
+      }))
+    : [];
   return JSON.stringify(
     {
       schema: "vibe-ppt/1",
       interfaceLocale: locale,
+      availableLayouts: Object.values(LAYOUT_TEMPLATES).map((layout) => ({
+        id: layout.id,
+        label: locale === "en" ? layout.labelEn : layout.label,
+        description: locale === "en" ? layout.descriptionEn : layout.description,
+        capacity: layout.capacity,
+      })),
+      quality: inspectDocument(document),
       currentDocument: document,
       selection: {
         slideId: selectedSlideId,
         slideTitle: selectedSlide?.title,
         elementId: selectedElementId,
         element: selectedElement,
+        layoutCandidates: selectedLayoutCandidates,
       },
     },
     null,

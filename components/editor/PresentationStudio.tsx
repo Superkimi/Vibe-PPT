@@ -6,12 +6,20 @@ import { MagicWand, SlidersHorizontal } from "@phosphor-icons/react";
 import { createStarterDocument } from "@/lib/starter-document";
 import { duplicateSlide, normalizeDocument } from "@/lib/document-operations";
 import type { PresentationDocument, Slide, SlideElement } from "@/lib/presentation-schema";
+import { applyLayoutToSlide } from "@/lib/layout-templates";
+import type { LayoutId } from "@/lib/layout-types";
+import {
+  inspectDocument,
+  mergeQualityReports,
+  scanRenderedSlides,
+} from "@/lib/presentation-quality";
 import { AiPanel, type ModelConfig } from "./AiPanel";
 import { CanvasWorkspace } from "./CanvasWorkspace";
 import { EditorProvider, type EditorContextValue } from "./EditorContext";
 import { InspectorPanel } from "./InspectorPanel";
 import { DEFAULT_MODEL_CONFIG, ModelSettings } from "./ModelSettings";
 import { PresentOverlay } from "./PresentOverlay";
+import { QualityStatus } from "./QualityStatus";
 import { SlideRail } from "./SlideRail";
 import { TopToolbar } from "./TopToolbar";
 import { EditorI18nProvider, useEditorI18n } from "./EditorI18n";
@@ -54,6 +62,7 @@ function StudioWorkspace() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL_CONFIG);
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
+  const [renderedIssues, setRenderedIssues] = useState<ReturnType<typeof scanRenderedSlides>>([]);
   const [saveState, setSaveState] = useState(t("saved"));
   const pastRef = useRef<PresentationDocument[]>([]);
   const futureRef = useRef<PresentationDocument[]>([]);
@@ -142,6 +151,21 @@ function StudioWorkspace() {
 
   const selectedSlide = document.slides.find((slide) => slide.id === selectedSlideId) || document.slides[0];
   const selectedElement = selectedSlide.elements.find((element) => element.id === selectedElementId);
+  const qualityReport = useMemo(
+    () => mergeQualityReports(inspectDocument(document), renderedIssues),
+    [document, renderedIssues],
+  );
+
+  useEffect(() => {
+    let timer: number | undefined;
+    const frame = window.requestAnimationFrame(() => {
+      timer = window.setTimeout(() => setRenderedIssues(scanRenderedSlides()), 50);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [document, selectedSlideId]);
 
   const updateSlide = useCallback(
     (patch: Partial<Pick<Slide, "title" | "background" | "transition" | "notes">>) =>
@@ -187,6 +211,7 @@ function StudioWorkspace() {
     const slide: Slide = {
       id: nanoid(),
       title: t("pageTitle", { count: document.slides.length + 1 }),
+      layout: "bullets",
       background: document.theme.background,
       transition: "fade",
       notes: "",
@@ -271,6 +296,17 @@ function StudioWorkspace() {
     [commit],
   );
 
+  const applyLayout = useCallback(
+    (layout: LayoutId) =>
+      commit((current) => ({
+        ...current,
+        slides: current.slides.map((slide) =>
+          slide.id === selectedSlideId ? applyLayoutToSlide(slide, layout) : slide,
+        ),
+      })),
+    [commit, selectedSlideId],
+  );
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
@@ -298,6 +334,7 @@ function StudioWorkspace() {
       selectedElement,
       canUndo: historyState.canUndo,
       canRedo: historyState.canRedo,
+      qualityReport,
       commit,
       setDocumentFromAi: (next) => {
         const normalized = normalizeDocument(next);
@@ -325,6 +362,7 @@ function StudioWorkspace() {
       addElement,
       deleteSelectedElement,
       reorderSlides,
+      applyLayout,
     }),
     [
       addElement,
@@ -335,6 +373,7 @@ function StudioWorkspace() {
       document,
       duplicateCurrentSlide,
       historyState,
+      qualityReport,
       redo,
       reorderSlides,
       selectedElement,
@@ -345,6 +384,7 @@ function StudioWorkspace() {
       updateDocumentTitle,
       updateElement,
       updateSlide,
+      applyLayout,
     ],
   );
 
@@ -372,6 +412,7 @@ function StudioWorkspace() {
           </aside>
         </div>
         <div className="autosave-state">{saveState}</div>
+        <QualityStatus />
       </div>
       {settingsOpen && (
         <ModelSettings

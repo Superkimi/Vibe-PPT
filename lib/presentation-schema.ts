@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LAYOUT_IDS } from "./layout-types";
 
 const id = z.string().min(1).max(96);
 const color = z.string().min(1).max(96);
@@ -59,33 +60,42 @@ export const imageElementSchema = baseElementSchema.extend({
 });
 
 export const chartElementSchema = baseElementSchema.extend({
-  type: z.literal("chart"),
-  chart: z.enum(["bar", "line", "pie"]),
-  labels: z.array(z.string().max(120)).min(1).max(24),
-  series: z
-    .array(
-      z.object({
-        name: z.string().max(120),
-        values: z.array(finite).min(1).max(24),
-        color: color,
-      }),
-    )
-    .min(1)
-    .max(8),
-  showLegend: z.boolean().default(true),
-  showValues: z.boolean().default(false),
-});
+    type: z.literal("chart"),
+    chart: z.enum(["bar", "line", "pie"]),
+    labels: z.array(z.string().max(120)).min(1).max(24),
+    series: z
+      .array(
+        z.object({
+          name: z.string().max(120),
+          values: z.array(finite).min(1).max(24),
+          color: color,
+        }),
+      )
+      .min(1)
+      .max(8),
+    showLegend: z.boolean().default(true),
+    showValues: z.boolean().default(false),
+  });
 
-export const slideElementSchema = z.discriminatedUnion("type", [
-  textElementSchema,
-  shapeElementSchema,
-  imageElementSchema,
-  chartElementSchema,
-]);
+export const slideElementSchema = z
+  .discriminatedUnion("type", [textElementSchema, shapeElementSchema, imageElementSchema, chartElementSchema])
+  .superRefine((element, context) => {
+    if (element.type !== "chart") return;
+    for (const [index, series] of element.series.entries()) {
+      if (series.values.length !== element.labels.length) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["series", index, "values"],
+          message: "series.values 必须与 labels 长度一致",
+        });
+      }
+    }
+  });
 
 export const slideSchema = z.object({
   id,
   title: z.string().min(1).max(180),
+  layout: z.enum(LAYOUT_IDS).optional(),
   background: color,
   transition: z.enum(["none", "fade", "slide", "zoom"]).default("fade"),
   notes: z.string().max(12000).default(""),
@@ -135,12 +145,14 @@ export const aiOperationSchema = z.discriminatedUnion("op", [
     patch: z
       .object({
         title: z.string().min(1).max(180).optional(),
+        layout: z.enum(LAYOUT_IDS).optional(),
         background: color.optional(),
         transition: z.enum(["none", "fade", "slide", "zoom"]).optional(),
         notes: z.string().max(12000).optional(),
       })
       .strict(),
   }),
+  z.object({ op: z.literal("apply_layout"), slideId: id, layout: z.enum(LAYOUT_IDS) }),
   z.object({ op: z.literal("insert_element"), slideId: id, element: slideElementSchema }),
   z.object({ op: z.literal("delete_element"), slideId: id, elementId: id }),
   z.object({
