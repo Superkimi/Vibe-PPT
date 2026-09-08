@@ -87,4 +87,14 @@ describe("AI route", () => {
     const requestBody = JSON.parse(String(options.body));
     expect(requestBody.messages[0].content).toContain("write slide copy");
   });
+
+  it("rejects private provider addresses even when a key is supplied", async () => {
+    const response = await POST(makeRequest({
+      baseUrl: "https://192.168.0.1/v1",
+      model: "example-model",
+      apiKey: "test-key",
+    }));
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: "模型地址不能指向内网或本机地址" });
+  });
 });

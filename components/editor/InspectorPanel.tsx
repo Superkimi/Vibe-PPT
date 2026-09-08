@@ -1,6 +1,7 @@
 "use client";
 
 import { Lock, LockOpen, Trash } from "@phosphor-icons/react";
+import { Fragment } from "react";
 import type { ChartElement, ShapeElement, TextElement } from "@/lib/presentation-schema";
 import { getLayoutCandidates } from "@/lib/layout-templates";
 import { useEditor } from "./EditorContext";
@@ -274,6 +275,27 @@ function ShapeInspector({ element, update }: { element: ShapeElement; update: (i
 
 function ChartInspector({ element, update }: { element: ChartElement; update: (id: string, patch: Partial<ChartElement>) => void }) {
   const { t } = useEditorI18n();
+  const updateLabel = (index: number, value: string) => {
+    const labels = [...element.labels];
+    labels[index] = value;
+    update(element.id, { labels });
+  };
+  const updateValue = (seriesIndex: number, valueIndex: number, value: string) => {
+    const series = element.series.map((item, currentSeriesIndex) =>
+      currentSeriesIndex === seriesIndex
+        ? { ...item, values: item.values.map((current, currentValueIndex) => currentValueIndex === valueIndex ? Number(value) : current) }
+        : item,
+    );
+    update(element.id, { series });
+  };
+  const updateSeriesName = (seriesIndex: number, name: string) => {
+    const series = element.series.map((item, index) => index === seriesIndex ? { ...item, name } : item);
+    update(element.id, { series });
+  };
+  const updateSeriesColor = (seriesIndex: number, color: string) => {
+    const series = element.series.map((item, index) => index === seriesIndex ? { ...item, color } : item);
+    update(element.id, { series });
+  };
   return (
     <section className="inspector-section">
       <h3>{t("chartSection")}</h3>
@@ -292,6 +314,32 @@ function ChartInspector({ element, update }: { element: ChartElement; update: (i
         <input type="checkbox" checked={element.showValues} onChange={(event) => update(element.id, { showValues: event.target.checked })} />
         <span>{t("showValues")}</span>
       </label>
+      <div className="chart-data-editor">
+        <h4>{t("chartData")}</h4>
+        <div className="chart-data-grid" style={{ gridTemplateColumns: `minmax(90px, 1fr) repeat(${element.series.length}, minmax(70px, 1fr))` }}>
+          <span>{t("chartLabel")}</span>
+          {element.series.map((series, index) => (
+            <div className="chart-series-header" key={`name-${series.name}-${index}`}>
+              <input value={series.name} aria-label={`${t("seriesName")} ${index + 1}`} onChange={(event) => updateSeriesName(index, event.target.value)} />
+              <input type="color" value={series.color.startsWith("#") ? series.color : "#6650a4"} aria-label={`${t("seriesColor")} ${index + 1}`} onChange={(event) => updateSeriesColor(index, event.target.value)} />
+            </div>
+          ))}
+          {element.labels.map((label, labelIndex) => (
+            <Fragment key={`row-${label}-${labelIndex}`}>
+              <input value={label} aria-label={`${t("chartLabel")} ${labelIndex + 1}`} onChange={(event) => updateLabel(labelIndex, event.target.value)} />
+              {element.series.map((series, seriesIndex) => (
+                <input
+                  key={`${series.name}-${labelIndex}`}
+                  type="number"
+                  value={series.values[labelIndex] ?? 0}
+                  aria-label={`${series.name} ${label}`}
+                  onChange={(event) => updateValue(seriesIndex, labelIndex, event.target.value)}
+                />
+              ))}
+            </Fragment>
+          ))}
+        </div>
+      </div>
       <p className="field-hint">{t("chartHint")}</p>
     </section>
   );

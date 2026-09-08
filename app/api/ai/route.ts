@@ -3,6 +3,7 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { aiResponseSchema } from "@/lib/presentation-schema";
 import { VIBE_PPT_SYSTEM_PROMPT } from "@/lib/ai-system-prompt";
+import { isLoopbackHost, validateProviderEndpoint } from "@/lib/provider-security";
 
 export const runtime = "nodejs";
 
@@ -26,26 +27,6 @@ const requestSchema = z.object({
   }),
 });
 
-function isPrivateIpv4(hostname: string) {
-  return (
-    /^10\./.test(hostname) ||
-    /^127\./.test(hostname) ||
-    /^169\.254\./.test(hostname) ||
-    /^192\.168\./.test(hostname) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
-  );
-}
-
-function validateEndpoint(baseUrl: string) {
-  const url = new URL(baseUrl);
-  const local = url.hostname === "localhost" || url.hostname === "::1" || isPrivateIpv4(url.hostname);
-  if (local && process.env.NODE_ENV === "production") throw new Error("生产环境不允许访问内网模型地址");
-  if (url.protocol !== "https:" && !(local && process.env.NODE_ENV !== "production")) {
-    throw new Error("模型地址必须使用 HTTPS");
-  }
-  return url.toString().replace(/\/$/, "");
-}
-
 function parseModelJson(content: string) {
   const cleaned = content.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   return aiResponseSchema.parse(JSON.parse(cleaned));
@@ -64,19 +45,48 @@ async function callProvider(
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(120_000),
+    redirect: "error",
     cache: "no-store",
   });
 }
 
+const requestBuckets = new Map<string, { startedAt: number; count: number }>();
+let activeRequests = 0;
+
+function requestAddress(request: NextRequest) {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anonymous";
+}
+
+function allowRequest(request: NextRequest) {
+  const now = Date.now();
+  const key = requestAddress(request);
+  const bucket = requestBuckets.get(key);
+  if (!bucket || now - bucket.startedAt >= 60_000) {
+    requestBuckets.set(key, { startedAt: now, count: 1 });
+  } else {
+    bucket.count += 1;
+    if (bucket.count > 20) return false;
+  }
+  return activeRequests < 4;
+}
+
 export async function POST(request: NextRequest) {
+  if (!allowRequest(request)) return Response.json({ error: "请求过于频繁，请稍后再试" }, { status: 429 });
+  activeRequests += 1;
   try {
     const length = Number(request.headers.get("content-length") || 0);
     if (length > 2_000_000) return Response.json({ error: "演示内容过大，请减少上下文后重试" }, { status: 413 });
-    const input = requestSchema.parse(await request.json());
-    const endpoint = validateEndpoint(input.config.baseUrl || process.env.VIBE_PPT_BASE_URL || "https://api.openai.com/v1");
-    const apiKey = input.config.apiKey || process.env.VIBE_PPT_API_KEY || "";
+    const rawBody = await request.text();
+    if (rawBody.length > 2_000_000) return Response.json({ error: "演示内容过大，请减少上下文后重试" }, { status: 413 });
+    const input = requestSchema.parse(JSON.parse(rawBody));
+    const apiKey = input.config.apiKey || "";
+    const requestedUrl = new URL(input.config.baseUrl);
+    if (!apiKey && !isLoopbackHost(requestedUrl.hostname)) {
+      return Response.json({ error: "请先配置模型 API Key" }, { status: 400 });
+    }
+    const endpoint = await validateProviderEndpoint(input.config.baseUrl);
 
-    if (!apiKey && !endpoint.includes("localhost")) {
+    if (!apiKey && !isLoopbackHost(new URL(endpoint).hostname)) {
       return Response.json({ error: "请先配置模型 API Key" }, { status: 400 });
     }
 
@@ -125,7 +135,13 @@ export async function POST(request: NextRequest) {
     }
     return Response.json(parseModelJson(content));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "AI 请求失败";
-    return Response.json({ error: message }, { status: 422 });
+    const message = error instanceof z.ZodError
+      ? "请求或模型响应格式无效"
+      : error instanceof Error ? error.message : "AI 请求失败";
+    const status = /请求过于频繁|Key|HTTPS|内网|本机|地址|用户名|模型地址/.test(message) ? 400 : 422;
+    const detail = error instanceof z.ZodError ? error.issues.slice(0, 5).map((issue) => ({ path: issue.path, message: issue.message })) : undefined;
+    return Response.json({ error: message, ...(detail ? { detail } : {}) }, { status });
+  } finally {
+    activeRequests = Math.max(0, activeRequests - 1);
   }
 }

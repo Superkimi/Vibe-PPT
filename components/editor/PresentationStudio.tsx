@@ -5,7 +5,8 @@ import { nanoid } from "nanoid";
 import { MagicWand, SlidersHorizontal } from "@phosphor-icons/react";
 import { createStarterDocument } from "@/lib/starter-document";
 import { duplicateSlide, normalizeDocument } from "@/lib/document-operations";
-import type { PresentationDocument, Slide, SlideElement } from "@/lib/presentation-schema";
+import { loadPersistedDocumentCandidates, savePersistedDocument } from "@/lib/document-persistence";
+import { slideElementSchema, type PresentationDocument, type Slide, type SlideElement } from "@/lib/presentation-schema";
 import { applyLayoutToSlide } from "@/lib/layout-templates";
 import type { LayoutId } from "@/lib/layout-types";
 import {
@@ -24,8 +25,10 @@ import { SlideRail } from "./SlideRail";
 import { TopToolbar } from "./TopToolbar";
 import { EditorI18nProvider, useEditorI18n } from "./EditorI18n";
 import type { EditorLocale } from "@/lib/editor-i18n";
+import { BASE_PATH } from "@/lib/base-path";
+import { downloadJson } from "@/lib/download";
+import { APP_VERSION } from "@/lib/version";
 
-const STORAGE_KEY = "vibe-ppt-document";
 const MODEL_STORAGE_KEY = "vibe-ppt-model-config";
 const LOCALE_STORAGE_KEY = "vibe-ppt-locale";
 const INITIAL_DOCUMENT = createStarterDocument();
@@ -61,9 +64,11 @@ function StudioWorkspace() {
   const [presenting, setPresenting] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL_CONFIG);
+  const [documentRevision, setDocumentRevision] = useState(0);
   const [historyState, setHistoryState] = useState({ canUndo: false, canRedo: false });
   const [renderedIssues, setRenderedIssues] = useState<ReturnType<typeof scanRenderedSlides>>([]);
   const [saveState, setSaveState] = useState(t("saved"));
+  const [hydrated, setHydrated] = useState(false);
   const pastRef = useRef<PresentationDocument[]>([]);
   const futureRef = useRef<PresentationDocument[]>([]);
   const hydratedRef = useRef(false);
@@ -71,23 +76,56 @@ function StudioWorkspace() {
   const starterLocaleRef = useRef<EditorLocale>("zh");
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        hasSavedDocumentRef.current = true;
-        const next = normalizeDocument(JSON.parse(saved));
-        // Loading persisted state is the external-system synchronization this effect owns.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setDocument(next);
-        setSelectedSlideId(next.slides[0].id);
+    let cancelled = false;
+    void (async () => {
+      try {
+        const savedCandidates = await loadPersistedDocumentCandidates();
+        if (!cancelled) {
+          for (const saved of savedCandidates) {
+            try {
+              const next = normalizeDocument(saved);
+              hasSavedDocumentRef.current = true;
+              setDocument(next);
+              setSelectedSlideId(next.slides[0].id);
+              break;
+            } catch {
+              // Try the backup copy before falling back to the starter document.
+            }
+          }
+        }
+      } catch {
+        // A storage failure should not remove the user's last recoverable copy.
       }
-      const savedModel = localStorage.getItem(MODEL_STORAGE_KEY);
-      if (savedModel) setModelConfig({ ...DEFAULT_MODEL_CONFIG, ...JSON.parse(savedModel) });
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-    } finally {
-      hydratedRef.current = true;
-    }
+      try {
+        const savedModel = localStorage.getItem(MODEL_STORAGE_KEY);
+        if (savedModel && !cancelled) {
+          const parsed = JSON.parse(savedModel) as Partial<ModelConfig>;
+          const sanitizedModel = {
+            baseUrl: parsed.baseUrl || DEFAULT_MODEL_CONFIG.baseUrl,
+            model: parsed.model || "",
+            temperature: typeof parsed.temperature === "number" ? parsed.temperature : DEFAULT_MODEL_CONFIG.temperature,
+          };
+          setModelConfig({
+            ...DEFAULT_MODEL_CONFIG,
+            ...sanitizedModel,
+            apiKey: "",
+          });
+          if (Object.prototype.hasOwnProperty.call(parsed, "apiKey")) {
+            localStorage.setItem(MODEL_STORAGE_KEY, JSON.stringify(sanitizedModel));
+          }
+        }
+      } catch {
+        // Model settings are optional and can be re-entered from the settings dialog.
+      } finally {
+        if (!cancelled) {
+          hydratedRef.current = true;
+          setHydrated(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -100,23 +138,25 @@ function StudioWorkspace() {
   }, [document, locale]);
 
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    if (!hydratedRef.current || !hydrated) return;
     setSaveState(t("saving"));
     const timer = window.setTimeout(() => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
-      setSaveState(t("saved"));
+      void savePersistedDocument(document)
+        .then(() => setSaveState(t("saved")))
+        .catch(() => setSaveState(t("saveFailed")));
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [document, t]);
+  }, [document, hydrated, t]);
 
   const commit = useCallback((updater: (current: PresentationDocument) => PresentationDocument) => {
     setDocument((current) => {
       const next = updater(structuredClone(current));
-      if (next === current) return current;
+      if (JSON.stringify(next) === JSON.stringify(current)) return current;
       pastRef.current.push(current);
       if (pastRef.current.length > 100) pastRef.current.shift();
       futureRef.current = [];
       setHistoryState({ canUndo: true, canRedo: false });
+      setDocumentRevision((revision) => revision + 1);
       return { ...next, updatedAt: new Date().toISOString() };
     });
   }, []);
@@ -127,6 +167,7 @@ function StudioWorkspace() {
       if (!previous) return current;
       futureRef.current.push(current);
       setHistoryState({ canUndo: pastRef.current.length > 0, canRedo: true });
+      setDocumentRevision((revision) => revision + 1);
       return previous;
     });
   }, []);
@@ -137,6 +178,7 @@ function StudioWorkspace() {
       if (!next) return current;
       pastRef.current.push(current);
       setHistoryState({ canUndo: true, canRedo: futureRef.current.length > 0 });
+      setDocumentRevision((revision) => revision + 1);
       return next;
     });
   }, []);
@@ -147,25 +189,52 @@ function StudioWorkspace() {
       title,
       updatedAt: new Date().toISOString(),
     }));
+    setDocumentRevision((revision) => revision + 1);
   }, []);
 
   const selectedSlide = document.slides.find((slide) => slide.id === selectedSlideId) || document.slides[0];
   const selectedElement = selectedSlide.elements.find((element) => element.id === selectedElementId);
+
+  // Selection reconciliation intentionally synchronizes state after document mutations.
+  useEffect(() => {
+    if (!document.slides.some((slide) => slide.id === selectedSlideId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedSlideId(document.slides[0].id);
+      setSelectedElementId(undefined);
+      return;
+    }
+    if (selectedElementId && !selectedSlide.elements.some((element) => element.id === selectedElementId)) {
+      setSelectedElementId(undefined);
+    }
+  }, [document, selectedElementId, selectedSlide.elements, selectedSlideId]);
   const qualityReport = useMemo(
-    () => mergeQualityReports(inspectDocument(document), renderedIssues),
-    [document, renderedIssues],
+    () => mergeQualityReports(inspectDocument(document, locale), renderedIssues),
+    [document, locale, renderedIssues],
   );
 
   useEffect(() => {
     let timer: number | undefined;
+    const imageHandlers: Array<[HTMLImageElement, () => void, () => void]> = [];
     const frame = window.requestAnimationFrame(() => {
-      timer = window.setTimeout(() => setRenderedIssues(scanRenderedSlides()), 50);
+      timer = window.setTimeout(() => {
+        setRenderedIssues(scanRenderedSlides(undefined, locale));
+        for (const image of Array.from(window.document.querySelectorAll<HTMLImageElement>(".slide-renderer img.slide-image"))) {
+          const refresh = () => setRenderedIssues(scanRenderedSlides(undefined, locale));
+          image.addEventListener("load", refresh);
+          image.addEventListener("error", refresh);
+          imageHandlers.push([image, refresh, refresh]);
+        }
+      }, 50);
     });
     return () => {
       window.cancelAnimationFrame(frame);
       if (timer !== undefined) window.clearTimeout(timer);
+      for (const [image, onLoad, onError] of imageHandlers) {
+        image.removeEventListener("load", onLoad);
+        image.removeEventListener("error", onError);
+      }
     };
-  }, [document, selectedSlideId]);
+  }, [document, locale, selectedSlideId]);
 
   const updateSlide = useCallback(
     (patch: Partial<Pick<Slide, "title" | "background" | "transition" | "notes">>) =>
@@ -185,7 +254,13 @@ function StudioWorkspace() {
             ? {
                 ...slide,
                 elements: slide.elements.map((element) =>
-                  element.id === elementId ? ({ ...element, ...patch } as SlideElement) : element,
+                  element.id === elementId
+                    ? element.locked && !Object.prototype.hasOwnProperty.call(patch, "locked")
+                      ? element
+                      : slideElementSchema.safeParse({ ...element, ...patch }).success
+                        ? (slideElementSchema.parse({ ...element, ...patch }) as SlideElement)
+                        : element
+                    : element,
                 ),
               }
             : slide,
@@ -272,6 +347,7 @@ function StudioWorkspace() {
 
   const deleteSelectedElement = useCallback(() => {
     if (!selectedElementId) return;
+    if (selectedElement?.locked) return;
     commit((current) => ({
       ...current,
       slides: current.slides.map((slide) =>
@@ -281,7 +357,7 @@ function StudioWorkspace() {
       ),
     }));
     setSelectedElementId(undefined);
-  }, [commit, selectedElementId, selectedSlideId]);
+  }, [commit, selectedElement, selectedElementId, selectedSlideId]);
 
   const reorderSlides = useCallback(
     (from: number, to: number) => {
@@ -301,7 +377,7 @@ function StudioWorkspace() {
       commit((current) => ({
         ...current,
         slides: current.slides.map((slide) =>
-          slide.id === selectedSlideId ? applyLayoutToSlide(slide, layout) : slide,
+          slide.id === selectedSlideId ? applyLayoutToSlide(slide, layout, current.size) : slide,
         ),
       })),
     [commit, selectedSlideId],
@@ -332,11 +408,13 @@ function StudioWorkspace() {
       selectedElementId,
       selectedSlide,
       selectedElement,
+      documentRevision,
       canUndo: historyState.canUndo,
       canRedo: historyState.canRedo,
       qualityReport,
       commit,
-      setDocumentFromAi: (next) => {
+      setDocumentFromAi: (next, _summary, baseRevision) => {
+        if (baseRevision !== undefined && baseRevision !== documentRevision) return false;
         const normalized = normalizeDocument(next);
         commit(() => normalized);
         setSelectedSlideId(
@@ -345,6 +423,7 @@ function StudioWorkspace() {
             : normalized.slides[0].id,
         );
         setSelectedElementId(undefined);
+        return true;
       },
       selectSlide: (slideId) => {
         setSelectedSlideId(slideId);
@@ -371,6 +450,7 @@ function StudioWorkspace() {
       deleteCurrentSlide,
       deleteSelectedElement,
       document,
+      documentRevision,
       duplicateCurrentSlide,
       historyState,
       qualityReport,
@@ -388,9 +468,13 @@ function StudioWorkspace() {
     ],
   );
 
+  if (!hydrated) {
+    return <div className="studio-loading" role="status">{t("loadingDocument")}</div>;
+  }
+
   return (
     <EditorProvider value={context}>
-      <div className="studio-shell">
+      <div className="studio-shell" data-app-version={APP_VERSION}>
         <TopToolbar onPresent={() => setPresenting(true)} />
         <div className="studio-body">
           <SlideRail />
@@ -404,14 +488,22 @@ function StudioWorkspace() {
                 <MagicWand size={16} /> {t("ai")}
               </button>
             </div>
-            {activePanel === "design" ? (
+            <div className={`panel-view ${activePanel === "design" ? "" : "is-hidden"}`} aria-hidden={activePanel !== "design"}>
               <InspectorPanel />
-            ) : (
+            </div>
+            <div className={`panel-view ${activePanel === "ai" ? "" : "is-hidden"}`} aria-hidden={activePanel !== "ai"}>
               <AiPanel config={modelConfig} onOpenSettings={() => setSettingsOpen(true)} />
-            )}
+            </div>
           </aside>
         </div>
-        <div className="autosave-state">{saveState}</div>
+        <div className="autosave-state">
+          {saveState}
+          {saveState === t("saveFailed") && (
+            <button type="button" onClick={() => downloadJson(`${document.title}.vibe.json`, document)}>
+              {t("downloadBackup")}
+            </button>
+          )}
+        </div>
         <QualityStatus />
       </div>
       {settingsOpen && (
@@ -421,14 +513,41 @@ function StudioWorkspace() {
           onClose={() => setSettingsOpen(false)}
           onSave={(config) => {
             setModelConfig(config);
-            localStorage.setItem(MODEL_STORAGE_KEY, JSON.stringify(config));
+            localStorage.setItem(MODEL_STORAGE_KEY, JSON.stringify({
+              baseUrl: config.baseUrl,
+              model: config.model,
+              temperature: config.temperature,
+            }));
+          }}
+          onTestConnection={async (config) => {
+            try {
+              const hostname = new URL(config.baseUrl).hostname.toLowerCase();
+              const local = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+              if (!config.apiKey && !local) return t("apiKeyRequired");
+            } catch {
+              return t("connectionFailed");
+            }
+            try {
+              const response = await fetch(`${BASE_PATH}/api/ai/test`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ config }),
+              });
+              if (!response.ok) {
+                const payload = await response.json().catch(() => ({}));
+                return payload.error || t("connectionFailed");
+              }
+              return undefined;
+            } catch {
+              return t("connectionFailed");
+            }
           }}
         />
       )}
       {presenting && (
         <PresentOverlay
           document={document}
-          initialIndex={document.slides.findIndex((slide) => slide.id === selectedSlideId)}
+            initialIndex={Math.max(0, document.slides.findIndex((slide) => slide.id === selectedSlideId))}
           onClose={() => setPresenting(false)}
         />
       )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
   CheckCircle,
@@ -8,6 +8,7 @@ import {
   MagicWand,
   Sparkle,
   WarningCircle,
+  X,
 } from "@phosphor-icons/react";
 import { buildAiContext } from "@/lib/ai-system-prompt";
 import { aiResponseSchema, type AiResponse } from "@/lib/presentation-schema";
@@ -40,7 +41,7 @@ export function AiPanel({
   config: ModelConfig;
   onOpenSettings: () => void;
 }) {
-  const { document, selectedSlideId, selectedElementId, setDocumentFromAi } = useEditor();
+  const { document, selectedSlideId, selectedElementId, documentRevision, setDocumentFromAi } = useEditor();
   const { locale, t } = useEditorI18n();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -51,7 +52,17 @@ export function AiPanel({
   ]);
   const [draft, setDraft] = useState("");
   const [running, setRunning] = useState(false);
-  const configured = Boolean(config.model && (config.apiKey || config.baseUrl.includes("localhost")));
+  const abortRef = useRef<AbortController | undefined>(undefined);
+  const configured = useMemo(() => {
+    if (!config.model || !config.baseUrl) return false;
+    try {
+      const hostname = new URL(config.baseUrl).hostname.toLowerCase();
+      return Boolean(config.apiKey || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]");
+    } catch {
+      return false;
+    }
+  }, [config]);
+  useEffect(() => () => abortRef.current?.abort(), []);
   useEffect(() => {
     setMessages((current) =>
       current.length === 1 && current[0].id === "welcome"
@@ -67,11 +78,23 @@ export function AiPanel({
   async function send(content = draft) {
     const prompt = content.trim();
     if (!prompt || running) return;
+    if (!configured) {
+      setMessages((current) => [...current, {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: t("configureModelFirst"),
+        error: true,
+      }]);
+      return;
+    }
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: "user", content: prompt };
     const nextMessages = [...messages, userMessage];
     setMessages(nextMessages);
     setDraft("");
     setRunning(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const requestRevision = documentRevision;
 
     try {
       const response = await fetch(`${BASE_PATH}/api/ai`, {
@@ -86,12 +109,15 @@ export function AiPanel({
           locale,
           config,
         }),
+        signal: controller.signal,
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || t("aiRequestFailed"));
       const result: AiResponse = aiResponseSchema.parse(payload);
       const nextDocument = applyOperations(document, result.operations);
-      setDocumentFromAi(nextDocument, result.summary);
+      if (!setDocumentFromAi(nextDocument, result.summary, requestRevision)) {
+        throw new Error(t("aiDocumentChanged"));
+      }
       setMessages((current) => [
         ...current,
         {
@@ -102,6 +128,7 @@ export function AiPanel({
         },
       ]);
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       setMessages((current) => [
         ...current,
         {
@@ -112,6 +139,7 @@ export function AiPanel({
         },
       ]);
     } finally {
+      if (abortRef.current === controller) abortRef.current = undefined;
       setRunning(false);
     }
   }
@@ -129,7 +157,7 @@ export function AiPanel({
       </div>
       <div className="model-strip">
         <span>{config.model || t("modelNotConfigured")}</span>
-        <i>{configured ? t("connected") : t("needsSetup")}</i>
+        <i>{configured ? t("configured") : t("needsSetup")}</i>
       </div>
       <div className="chat-thread" aria-live="polite">
         {messages.map((message) => (
@@ -165,7 +193,7 @@ export function AiPanel({
       {messages.length === 1 && (
         <div className="prompt-chips">
           {starterPromptKeys.map((promptKey) => (
-            <button type="button" key={promptKey} onClick={() => void send(t(promptKey))}>
+            <button type="button" key={promptKey} disabled={!configured} onClick={() => void send(t(promptKey))}>
               {t(promptKey)}
             </button>
           ))}
@@ -192,9 +220,15 @@ export function AiPanel({
         />
         <div>
           <span>{t("currentContext")}</span>
-          <button type="submit" disabled={!configured || running || !draft.trim()} aria-label={t("send")}>
-            <ArrowUp size={17} weight="bold" />
-          </button>
+          {running ? (
+            <button type="button" onClick={() => abortRef.current?.abort()} aria-label={t("cancelRequest")}>
+              <X size={17} weight="bold" />
+            </button>
+          ) : (
+            <button type="submit" disabled={!configured || !draft.trim()} aria-label={t("send")}>
+              <ArrowUp size={17} weight="bold" />
+            </button>
+          )}
         </div>
       </form>
     </div>

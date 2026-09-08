@@ -78,36 +78,38 @@ export function CanvasWorkspace() {
                 }
                 onDoubleClick={() => element.type === "text" && setEditingId(element.id)}
               >
-                {element.type === "text" && editingId === element.id ? (
-                  <div
-                    className="slide-text canvas-text-editor"
-                    contentEditable
-                    suppressContentEditableWarning
-                    autoFocus
-                    style={{
-                      fontFamily: element.fontFamily,
-                      fontSize: element.fontSize,
-                      fontWeight: element.fontWeight,
-                      lineHeight: element.lineHeight,
-                      letterSpacing: element.letterSpacing,
-                      color: element.color,
-                      textAlign: element.align,
-                    }}
-                    onBlur={(event) => {
-                      updateElement(element.id, { text: event.currentTarget.textContent || "" });
-                      setEditingId(undefined);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape") {
-                        event.currentTarget.blur();
-                      }
-                    }}
-                  >
-                    {element.text}
-                  </div>
-                ) : (
-                  <ElementContent element={element} />
-                )}
+                <div className="canvas-element-visual" style={{ transform: `rotate(${element.rotation}deg)`, opacity: element.opacity }}>
+                  {element.type === "text" && editingId === element.id ? (
+                    <div
+                      className="slide-text canvas-text-editor"
+                      contentEditable
+                      suppressContentEditableWarning
+                      autoFocus
+                      style={{
+                        fontFamily: element.fontFamily,
+                        fontSize: element.fontSize,
+                        fontWeight: element.fontWeight,
+                        lineHeight: element.lineHeight,
+                        letterSpacing: element.letterSpacing,
+                        color: element.color,
+                        textAlign: element.align,
+                      }}
+                      onBlur={(event) => {
+                        updateElement(element.id, { text: event.currentTarget.textContent || "" });
+                        setEditingId(undefined);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          event.currentTarget.blur();
+                        }
+                      }}
+                    >
+                      {element.text}
+                    </div>
+                  ) : (
+                    <ElementContent element={element} />
+                  )}
+                </div>
               </Rnd>
             );
           })}

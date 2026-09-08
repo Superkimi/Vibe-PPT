@@ -11,11 +11,12 @@ export interface EditorContextValue {
   selectedElementId?: string;
   selectedSlide: Slide;
   selectedElement?: SlideElement;
+  documentRevision: number;
   canUndo: boolean;
   canRedo: boolean;
   qualityReport: PresentationQualityReport;
   commit: (updater: (current: PresentationDocument) => PresentationDocument) => void;
-  setDocumentFromAi: (document: PresentationDocument, summary: string) => void;
+  setDocumentFromAi: (document: PresentationDocument, summary?: string, baseRevision?: number) => boolean;
   selectSlide: (slideId: string) => void;
   selectElement: (elementId?: string) => void;
   undo: () => void;

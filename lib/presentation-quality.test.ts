@@ -66,4 +66,13 @@ describe("presentation quality checks", () => {
     expect(report.issues.some((issue) => issue.kind === "chart-data-mismatch")).toBe(true);
     expect(report.errors).toBeGreaterThan(0);
   });
+
+  it("localizes quality messages for the English editor", () => {
+    const document = createStarterDocument();
+    const next = structuredClone(document) as PresentationDocument;
+    const text = next.slides[0].elements.find((element) => element.type === "text");
+    next.slides[0].elements = text ? [{ ...text, text: "Double-click to edit" }] : [];
+    const report = inspectDocument(next, "en");
+    expect(report.issues.find((issue) => issue.kind === "placeholder-text")?.message).toContain("Placeholder copy");
+  });
 });

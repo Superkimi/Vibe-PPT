@@ -112,7 +112,7 @@ export function applyOperations(document: PresentationDocument, input: AiOperati
         next.slides[slideIndex] = { ...next.slides[slideIndex], ...operation.patch };
         break;
       case "apply_layout":
-        next.slides[slideIndex] = applyLayoutToSlide(next.slides[slideIndex], operation.layout);
+        next.slides[slideIndex] = applyLayoutToSlide(next.slides[slideIndex], operation.layout, next.size);
         break;
       case "insert_element":
         next.slides[slideIndex].elements.push(
@@ -120,6 +120,9 @@ export function applyOperations(document: PresentationDocument, input: AiOperati
         );
         break;
       case "delete_element":
+        if (next.slides[slideIndex].elements.some((element) => element.id === operation.elementId && element.locked)) {
+          throw new Error("锁定元素不能删除");
+        }
         next.slides[slideIndex].elements = next.slides[slideIndex].elements.filter(
           (element) => element.id !== operation.elementId,
         );
@@ -134,6 +137,9 @@ export function applyOperations(document: PresentationDocument, input: AiOperati
         const safePatch = Object.fromEntries(
           Object.entries(operation.patch).filter(([key]) => !protectedKeys.has(key)),
         );
+        if (current.locked && Object.keys(safePatch).some((key) => key !== "locked")) {
+          throw new Error("锁定元素不能修改，请先解锁");
+        }
         next.slides[slideIndex].elements[elementIndex] = clampElement(
           { ...current, ...safePatch } as SlideElement,
           next.size.width,

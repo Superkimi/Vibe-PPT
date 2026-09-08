@@ -6,12 +6,15 @@ import type {
   TextElement,
 } from "./presentation-schema";
 
-const INCH_WIDTH = 13.333;
-const INCH_HEIGHT = 7.5;
 
 function hex(value: string) {
   const match = value.match(/^#([0-9a-f]{6})$/i);
   return match ? match[1].toUpperCase() : "000000";
+}
+
+function fontForText(text: string, requested: string, fallback: string) {
+  if (/[\u3400-\u9fff]/.test(text)) return "Hiragino Sans GB";
+  return requested.startsWith("var(") ? fallback : requested;
 }
 
 function toDataUri(buffer: ArrayBuffer, mime: string) {
@@ -34,18 +37,23 @@ export async function exportPresentationToPptx(document: PresentationDocument) {
   const pptxModule = await import("pptxgenjs");
   const PptxGenJS = pptxModule.default;
   const pptx = new PptxGenJS();
-  pptx.layout = "LAYOUT_WIDE";
+  const inchWidth = 13.333;
+  const inchHeight = inchWidth * (document.size.height / document.size.width);
+  const layoutName = "VIBE_CUSTOM";
+  pptx.defineLayout({ name: layoutName, width: inchWidth, height: inchHeight });
+  pptx.layout = layoutName;
   pptx.author = "Vibe PPT";
   pptx.subject = document.title;
   pptx.title = document.title;
   pptx.company = "aihubhub";
+  const hasCjk = document.slides.some((slide) => slide.elements.some((element) => element.type === "text" && /[\u3400-\u9fff]/.test(element.text)));
   pptx.theme = {
-    headFontFace: "Aptos Display",
-    bodyFontFace: "Aptos",
+    headFontFace: hasCjk ? "Hiragino Sans GB" : document.theme.headingFamily.startsWith("var(") ? "Aptos Display" : document.theme.headingFamily,
+    bodyFontFace: hasCjk ? "Hiragino Sans GB" : document.theme.fontFamily.startsWith("var(") ? "Aptos" : document.theme.fontFamily,
   };
 
-  const sx = INCH_WIDTH / document.size.width;
-  const sy = INCH_HEIGHT / document.size.height;
+  const sx = inchWidth / document.size.width;
+  const sy = inchHeight / document.size.height;
 
   for (const sourceSlide of document.slides) {
     const slide = pptx.addSlide();
@@ -66,7 +74,7 @@ export async function exportPresentationToPptx(document: PresentationDocument) {
         const text = element as TextElement;
         slide.addText(text.text, {
           ...box,
-          fontFace: "Aptos",
+          fontFace: fontForText(text.text, text.fontFamily, document.theme.fontFamily.startsWith("var(") ? "Aptos" : document.theme.fontFamily),
           fontSize: Math.max(6, text.fontSize * 0.75),
           bold: text.fontWeight >= 650,
           color: hex(text.color),
@@ -88,7 +96,9 @@ export async function exportPresentationToPptx(document: PresentationDocument) {
             ? pptx.ShapeType.ellipse
             : shape.shape === "line"
               ? pptx.ShapeType.line
-              : pptx.ShapeType.rect;
+              : shape.radius > 0
+                ? pptx.ShapeType.roundRect
+                : pptx.ShapeType.rect;
         slide.addShape(shapeType, {
           ...box,
           fill: shape.shape === "line" ? { color: hex(shape.stroke), transparency: 100 } : { color: hex(shape.fill) },
@@ -99,7 +109,12 @@ export async function exportPresentationToPptx(document: PresentationDocument) {
 
       if (element.type === "image") {
         const data = await resolveImageData(element as ImageElement);
-        slide.addImage({ ...box, data });
+        slide.addImage({
+          ...box,
+          data,
+          ...(element.fit === "fill" ? {} : { sizing: { type: element.fit, w: box.w, h: box.h } }),
+          rounding: element.radius > 0,
+        });
         continue;
       }
 

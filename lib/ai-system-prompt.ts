@@ -66,7 +66,17 @@ export function buildAiContext(
   selectedElementId?: string,
   locale: EditorLocale = "zh",
 ) {
-  const selectedSlide = document.slides.find((slide) => slide.id === selectedSlideId);
+  const contextDocument = structuredClone(document);
+  let embeddedImageCount = 0;
+  for (const slide of contextDocument.slides) {
+    for (const element of slide.elements) {
+      if (element.type === "image" && element.src.startsWith("data:")) {
+        embeddedImageCount += 1;
+        element.src = `[embedded image ${embeddedImageCount} omitted from AI context]`;
+      }
+    }
+  }
+  const selectedSlide = contextDocument.slides.find((slide) => slide.id === selectedSlideId);
   const selectedElement = selectedSlide?.elements.find((element) => element.id === selectedElementId);
   const selectedLayoutCandidates = selectedSlide
     ? getLayoutCandidates(selectedSlide).map((layout) => ({
@@ -86,8 +96,8 @@ export function buildAiContext(
         description: locale === "en" ? layout.descriptionEn : layout.description,
         capacity: layout.capacity,
       })),
-      quality: inspectDocument(document),
-      currentDocument: document,
+      quality: inspectDocument(contextDocument, locale),
+      currentDocument: contextDocument,
       selection: {
         slideId: selectedSlideId,
         slideTitle: selectedSlide?.title,

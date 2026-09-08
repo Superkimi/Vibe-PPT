@@ -37,6 +37,7 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
   const documentFileRef = useRef<HTMLInputElement>(null);
   const imageFileRef = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   async function optimizeImage(file: File) {
     const bitmap = await createImageBitmap(file);
@@ -204,7 +205,7 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
           }}
         />
         <button type="button" className="icon-text-button" onClick={() => documentFileRef.current?.click()}>
-          <FileArrowUp size={17} /> {t("import")}
+          <FileArrowUp size={17} /> {t("importJson")}
         </button>
         <button type="button" className="icon-text-button" onClick={() => downloadJson(`${document.title}.vibe.json`, document)}>
           <DownloadSimple size={17} /> {t("json")}
@@ -212,11 +213,16 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
         <button
           type="button"
           className="icon-text-button"
+          disabled={exporting}
           onClick={() => {
-            void exportPresentationToPptx(document).catch(() => setNotice(t("pptxExportFailed")));
+            setExporting(true);
+            setNotice("");
+            void exportPresentationToPptx(document)
+              .catch(() => setNotice(t("pptxExportFailed")))
+              .finally(() => setExporting(false));
           }}
         >
-          <DownloadSimple size={17} /> {t("pptx")}
+          <DownloadSimple size={17} /> {exporting ? t("exporting") : t("pptx")}
         </button>
         <button type="button" className="present-button" onClick={onPresent}>
           <Play size={16} weight="fill" /> {t("present")}

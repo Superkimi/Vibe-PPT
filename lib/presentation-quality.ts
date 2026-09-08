@@ -8,6 +8,9 @@ export type QualityIssueKind =
   | "text-capacity"
   | "text-overflow"
   | "image-load-failed"
+  | "image-load-pending"
+  | "element-out-of-bounds"
+  | "chart-invalid"
   | "layout-capacity";
 
 export interface QualityIssue {
@@ -23,6 +26,12 @@ export interface PresentationQualityReport {
   issues: QualityIssue[];
   errors: number;
   warnings: number;
+}
+
+type QualityLocale = "zh" | "en";
+
+function message(locale: QualityLocale, zh: string, en: string) {
+  return locale === "en" ? en : zh;
 }
 
 const PLACEHOLDER_TEXT = [
@@ -49,6 +58,7 @@ function issue(
 
 function hasVisibleContent(element: SlideElement) {
   if (element.opacity <= 0 || element.w <= 0 || element.h <= 0) return false;
+  if (element.type === "shape" && element.fill === "transparent" && element.stroke === "transparent") return false;
   return element.type !== "text" || element.text.trim().length > 0;
 }
 
@@ -62,35 +72,46 @@ function estimateTextOverflow(element: Extract<SlideElement, { type: "text" }>) 
   return estimatedHeight > element.h * 1.08;
 }
 
-export function inspectDocument(document: PresentationDocument): PresentationQualityReport {
+export function inspectDocument(document: PresentationDocument, locale: QualityLocale = "zh"): PresentationQualityReport {
   const issues: QualityIssue[] = [];
 
   for (const slide of document.slides) {
     const visibleElements = slide.elements.filter(hasVisibleContent);
     if (visibleElements.length === 0) {
-      issues.push(issue("empty-slide", "error", slide.id, slide.title, "这一页没有可见内容"));
+      issues.push(issue("empty-slide", "error", slide.id, slide.title, message(locale, "这一页没有可见内容", "This slide has no visible content")));
     }
 
     const layout = inferLayout(slide);
-    for (const violation of capacityViolations(slide)) {
-      issues.push(issue("layout-capacity", "warning", slide.id, slide.title, `${layout}：${violation}`));
+    for (const violation of capacityViolations(slide, undefined, locale)) {
+      issues.push(issue("layout-capacity", "warning", slide.id, slide.title, `${layout}: ${violation}`));
     }
 
     for (const element of slide.elements) {
+      const right = element.x + element.w;
+      const bottom = element.y + element.h;
+      if (right < 0 || bottom < 0 || element.x > document.size.width || element.y > document.size.height || right > document.size.width || bottom > document.size.height) {
+        issues.push(issue("element-out-of-bounds", "warning", slide.id, slide.title, message(locale, "元素部分或全部超出页面边界", "Element is partly or fully outside the slide bounds"), element.id));
+      }
       if (element.type === "text") {
         const text = element.text.trim();
         if (PLACEHOLDER_TEXT.some((placeholder) => text === placeholder || text.startsWith(`${placeholder}：`))) {
-          issues.push(issue("placeholder-text", "warning", slide.id, slide.title, `发现占位文案：${text}`, element.id));
+          issues.push(issue("placeholder-text", "warning", slide.id, slide.title, message(locale, `发现占位文案：${text}`, `Placeholder copy found: ${text}`), element.id));
         }
         if (text && estimateTextOverflow(element)) {
-          issues.push(issue("text-capacity", "warning", slide.id, slide.title, "文字可能超出当前文本框容量", element.id));
+          issues.push(issue("text-capacity", "warning", slide.id, slide.title, message(locale, "文字可能超出当前文本框容量", "Text may overflow this text box"), element.id));
         }
       }
 
       if (element.type === "chart") {
         const invalidSeries = element.series.filter((series) => series.values.length !== element.labels.length);
         if (invalidSeries.length > 0) {
-          issues.push(issue("chart-data-mismatch", "error", slide.id, slide.title, "图表标签和数据数量不一致", element.id));
+          issues.push(issue("chart-data-mismatch", "error", slide.id, slide.title, message(locale, "图表标签和数据数量不一致", "Chart labels and values have different lengths"), element.id));
+        }
+        if (element.chart === "pie" && element.series.some((series) => series.values.some((value) => value < 0))) {
+          issues.push(issue("chart-invalid", "error", slide.id, slide.title, message(locale, "饼图不支持负数，请改为柱状图或折线图", "Pie charts do not support negative values; use a bar or line chart"), element.id));
+        }
+        if (element.chart === "pie" && element.series[0]?.values.every((value) => value <= 0)) {
+          issues.push(issue("chart-invalid", "error", slide.id, slide.title, message(locale, "饼图至少需要一个大于零的数据项", "A pie chart needs at least one value greater than zero"), element.id));
         }
       }
     }
@@ -99,7 +120,7 @@ export function inspectDocument(document: PresentationDocument): PresentationQua
   return summarizeQuality(issues);
 }
 
-export function scanRenderedSlides(root?: ParentNode): QualityIssue[] {
+export function scanRenderedSlides(root?: ParentNode, locale: QualityLocale = "zh"): QualityIssue[] {
   const issues: QualityIssue[] = [];
   const scope = root || (typeof document === "undefined" ? null : document);
   if (!scope) return issues;
@@ -118,12 +139,14 @@ export function scanRenderedSlides(root?: ParentNode): QualityIssue[] {
       if (!elementId) continue;
       const text = element.querySelector<HTMLElement>(".slide-text");
       if (text && (text.scrollHeight > text.clientHeight + 2 || text.scrollWidth > text.clientWidth + 2)) {
-        issues.push(issue("text-overflow", "error", slideId, slideTitle, "渲染后文字超出文本框", elementId));
+        issues.push(issue("text-overflow", "error", slideId, slideTitle, message(locale, "渲染后文字超出文本框", "Rendered text overflows its text box"), elementId));
       }
 
       const image = element.querySelector<HTMLImageElement>("img.slide-image");
-      if (image?.complete && image.naturalWidth === 0) {
-        issues.push(issue("image-load-failed", "error", slideId, slideTitle, "图片加载失败", elementId));
+      if (image && !image.complete) {
+        issues.push(issue("image-load-pending", "warning", slideId, slideTitle, message(locale, "图片仍在加载，质量检查尚未完成", "Image is still loading; quality checks are not complete"), elementId));
+      } else if (image?.complete && image.naturalWidth === 0) {
+        issues.push(issue("image-load-failed", "error", slideId, slideTitle, message(locale, "图片加载失败", "Image failed to load"), elementId));
       }
     }
   }

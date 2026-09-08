@@ -6,7 +6,7 @@ import { useEditor } from "./EditorContext";
 import { useEditorI18n } from "./EditorI18n";
 
 export function QualityStatus() {
-  const { qualityReport } = useEditor();
+  const { qualityReport, selectSlide, selectElement } = useEditor();
   const { t } = useEditorI18n();
   const [expanded, setExpanded] = useState(false);
   const hasIssues = qualityReport.issues.length > 0;
@@ -30,10 +30,12 @@ export function QualityStatus() {
             {qualityReport.warnings > 0 && <span>{t("qualityWarnings", { count: qualityReport.warnings })}</span>}
           </div>
           <ul>
-            {qualityReport.issues.slice(0, 8).map((item, index) => (
+            {qualityReport.issues.map((item, index) => (
               <li key={`${item.slideId}-${item.elementId || "slide"}-${item.kind}-${index}`}>
+                <button type="button" onClick={() => { selectSlide(item.slideId); selectElement(item.elementId); }}>
                 <b>{item.slideTitle || item.slideId}</b>
                 <span>{item.message}</span>
+                </button>
               </li>
             ))}
           </ul>
