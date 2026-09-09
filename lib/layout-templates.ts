@@ -86,6 +86,14 @@ function isText(element: SlideElement): element is TextElement {
   return element.type === "text";
 }
 
+// Page numbers are part of the visual chrome of a slide, not content that a
+// layout needs to make room for. Keeping this distinction in the capacity
+// check prevents every generated starter deck from opening with a false
+// warning while preserving strict counts for user-authored copy.
+function isAuxiliaryText(element: SlideElement) {
+  return element.type === "text" && element.name === "page-number";
+}
+
 function titleScore(element: TextElement) {
   const name = (element.name || "").toLowerCase();
   const namedTitle = /title|headline|标题|主标题/.test(name) && !/subtitle|副标题/.test(name) ? 1000 : 0;
@@ -237,10 +245,10 @@ export function applyLayoutToSlide(slide: Slide, layout: LayoutId, size = DEFAUL
 export function capacityViolations(slide: Slide, requestedLayout?: LayoutId, locale: "zh" | "en" = "zh") {
   const layout = requestedLayout || inferLayout(slide);
   const capacity: LayoutCapacity = getLayoutMeta(layout).capacity;
-  const textCount = slide.elements.filter(isText).length;
+  const textCount = slide.elements.filter((element) => isText(element) && !isAuxiliaryText(element)).length;
   const chartCount = slide.elements.filter((element) => element.type === "chart").length;
   const imageCount = slide.elements.filter((element) => element.type === "image").length;
-  const contentCount = slide.elements.filter((element) => element.type !== "shape").length;
+  const contentCount = slide.elements.filter((element) => element.type !== "shape" && !isAuxiliaryText(element)).length;
   const violations: string[] = [];
   const layoutName = locale === "en" ? getLayoutMeta(layout).labelEn : getLayoutMeta(layout).label;
 
