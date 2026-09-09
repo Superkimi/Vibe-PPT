@@ -11,6 +11,7 @@ import {
   NotePencil,
   ShieldCheck,
   SlidersHorizontal,
+  SquaresFour,
 } from "@phosphor-icons/react/dist/ssr";
 import { BASE_PATH } from "@/lib/base-path";
 
@@ -44,6 +45,12 @@ const capabilities = [
     text: "连接 OpenAI 兼容接口，也能在开发环境使用本地模型。",
     icon: SlidersHorizontal,
     className: "cap-model",
+  },
+  {
+    title: "12 套视觉系统",
+    text: "从轻拟态、代码、数据到霓虹，先选风格，再进入五页可编辑起始演示。",
+    icon: SquaresFour,
+    className: "cap-template",
   },
 ];
 
@@ -101,6 +108,10 @@ export default function HomePage() {
             <article>
               <MagicWand size={20} />
               <div><b>生成整套叙事</b><span>从主题、材料或大纲出发，建立页面节奏和演讲备注。</span></div>
+            </article>
+            <article>
+              <SquaresFour size={20} />
+              <div><b>先选视觉系统</b><span>按商业、科技、研究、数据和创意场景筛选模板，再快速开始。</span></div>
             </article>
             <article>
               <NotePencil size={20} />

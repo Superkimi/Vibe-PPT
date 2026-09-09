@@ -12,6 +12,7 @@ import {
   ImageSquare,
   Play,
   Rectangle,
+  SquaresFour,
   TextT,
 } from "@phosphor-icons/react";
 import { nanoid } from "nanoid";
@@ -22,7 +23,7 @@ import type { SlideElement } from "@/lib/presentation-schema";
 import { useEditor } from "./EditorContext";
 import { useEditorI18n } from "./EditorI18n";
 
-export function TopToolbar({ onPresent }: { onPresent: () => void }) {
+export function TopToolbar({ onPresent, onOpenTemplates }: { onPresent: () => void; onOpenTemplates: () => void }) {
   const {
     document,
     canUndo,
@@ -186,6 +187,9 @@ export function TopToolbar({ onPresent }: { onPresent: () => void }) {
         <button type="button" onClick={() => insert("chart")}><ChartBar size={18} />{t("chart")}</button>
       </div>
       <div className="toolbar-actions">
+        <button type="button" className="icon-text-button template-toolbar-button" onClick={onOpenTemplates}>
+          <SquaresFour size={17} /> {t("templates")}
+        </button>
         <input
           ref={documentFileRef}
           type="file"

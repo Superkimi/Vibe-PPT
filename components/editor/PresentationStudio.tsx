@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import { MagicWand, SlidersHorizontal } from "@phosphor-icons/react";
 import { createStarterDocument } from "@/lib/starter-document";
+import { createTemplateDocument, type TemplateId } from "@/lib/template-library";
 import { duplicateSlide, normalizeDocument } from "@/lib/document-operations";
 import { loadPersistedDocumentCandidates, savePersistedDocument } from "@/lib/document-persistence";
 import { slideElementSchema, type PresentationDocument, type Slide, type SlideElement } from "@/lib/presentation-schema";
@@ -23,6 +24,7 @@ import { PresentOverlay } from "./PresentOverlay";
 import { QualityStatus } from "./QualityStatus";
 import { SlideRail } from "./SlideRail";
 import { TopToolbar } from "./TopToolbar";
+import { TemplatePicker } from "./TemplatePicker";
 import { EditorI18nProvider, useEditorI18n } from "./EditorI18n";
 import type { EditorLocale } from "@/lib/editor-i18n";
 import { BASE_PATH } from "@/lib/base-path";
@@ -61,6 +63,7 @@ function StudioWorkspace() {
   const [selectedSlideId, setSelectedSlideId] = useState(INITIAL_DOCUMENT.slides[0].id);
   const [selectedElementId, setSelectedElementId] = useState<string>();
   const [activePanel, setActivePanel] = useState<"design" | "ai">("ai");
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelConfig, setModelConfig] = useState<ModelConfig>(DEFAULT_MODEL_CONFIG);
@@ -118,6 +121,7 @@ function StudioWorkspace() {
         // Model settings are optional and can be re-entered from the settings dialog.
       } finally {
         if (!cancelled) {
+          if (!hasSavedDocumentRef.current) setTemplatePickerOpen(true);
           hydratedRef.current = true;
           setHydrated(true);
         }
@@ -383,6 +387,18 @@ function StudioWorkspace() {
     [commit, selectedSlideId],
   );
 
+  const applyTemplate = useCallback(
+    (templateId: TemplateId) => {
+      const next = normalizeDocument(createTemplateDocument(templateId, locale));
+      commit(() => next);
+      setSelectedSlideId(next.slides[0].id);
+      setSelectedElementId(undefined);
+      setTemplatePickerOpen(false);
+      setActivePanel("ai");
+    },
+    [commit, locale],
+  );
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
@@ -475,7 +491,7 @@ function StudioWorkspace() {
   return (
     <EditorProvider value={context}>
       <div className="studio-shell" data-app-version={APP_VERSION}>
-        <TopToolbar onPresent={() => setPresenting(true)} />
+        <TopToolbar onPresent={() => setPresenting(true)} onOpenTemplates={() => setTemplatePickerOpen(true)} />
         <div className="studio-body">
           <SlideRail />
           <CanvasWorkspace />
@@ -544,6 +560,12 @@ function StudioWorkspace() {
           }}
         />
       )}
+      <TemplatePicker
+        open={templatePickerOpen}
+        locale={locale}
+        onClose={() => setTemplatePickerOpen(false)}
+        onSelect={applyTemplate}
+      />
       {presenting && (
         <PresentOverlay
           document={document}
